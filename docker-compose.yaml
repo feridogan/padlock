@@ -45,7 +45,6 @@ services:
     volumes:
       - padloc_data:/data
       - padloc_attachments:/attachments
-      - ./assets:/assets:ro
 
   # =================================================================
   # PADLOC PROGRESSIVE WEB APP (PWA FRONTEND)
@@ -80,8 +79,6 @@ services:
       - PL_PWA_URL=${PL_PWA_URL:-https://pass.feridundogan.com}
       - PL_PWA_PORT=8080
       - PL_ASSETS_DIR=/assets
-    volumes:
-      - ./assets:/assets:ro
 
 volumes:
   padloc_data:

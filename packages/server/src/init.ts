@@ -43,9 +43,27 @@ import { PostgresLogger } from "./logging/postgres";
 import { LevelDBLogger } from "./logging/leveldb";
 import { OauthProvisioner, OauthProvisionerConfig } from "./provisioning/oauth";
 
+import { existsSync } from "fs";
+
 const rootDir = resolve(__dirname, "../../..");
-const assetsDir = resolve(rootDir, process.env.PL_ASSETS_DIR || "assets");
-const { name } = require(join(assetsDir, "manifest.json"));
+let assetsDir = resolve(rootDir, process.env.PL_ASSETS_DIR || "assets");
+if (!existsSync(join(assetsDir, "manifest.json"))) {
+    if (existsSync(resolve(rootDir, "assets/manifest.json"))) {
+        assetsDir = resolve(rootDir, "assets");
+    } else if (existsSync("/assets/manifest.json")) {
+        assetsDir = "/assets";
+    }
+}
+
+let name = "Pass";
+try {
+    const manifestPath = join(assetsDir, "manifest.json");
+    if (existsSync(manifestPath)) {
+        name = require(manifestPath).name || "Pass";
+    }
+} catch (e) {
+    name = "Pass";
+}
 
 if (!process.env.PL_APP_NAME) {
     process.env.PL_APP_NAME = name;
