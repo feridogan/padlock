@@ -24,7 +24,7 @@ const assetsDir = isAbsolute(rawAssetsDir)
     : resolve(rootDir, rawAssetsDir);
 const disableCsp = process.env.PL_PWA_DISABLE_CSP === "true";
 
-let manifest = { name: "Kurumsal Kasa", terms_of_service: "" };
+let manifest = { name: "Pass", terms_of_service: "" };
 const manifestPath = join(assetsDir, "manifest.json");
 if (existsSync(manifestPath)) {
     manifest = require(manifestPath);

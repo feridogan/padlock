@@ -10,11 +10,15 @@ services:
     restart: unless-stopped
     expose:
       - "3005"
+    networks:
+      - default
+      - coolify
     labels:
       - "coolify.managed=true"
       - "traefik.enable=true"
+      - "traefik.docker.network=coolify"
       - "traefik.http.routers.server.rule=Host(`api-pass.feridundogan.com`)"
-      - "traefik.http.routers.server.entrypoints=https"
+      - "traefik.http.routers.server.entrypoints=https,websecure,http,web"
       - "traefik.http.routers.server.tls=true"
       - "traefik.http.routers.server.tls.certresolver=letsencrypt"
       - "traefik.http.services.server.loadbalancer.server.port=3005"
@@ -56,11 +60,15 @@ services:
       - server
     expose:
       - "8080"
+    networks:
+      - default
+      - coolify
     labels:
       - "coolify.managed=true"
       - "traefik.enable=true"
+      - "traefik.docker.network=coolify"
       - "traefik.http.routers.pwa.rule=Host(`pass.feridundogan.com`)"
-      - "traefik.http.routers.pwa.entrypoints=https"
+      - "traefik.http.routers.pwa.entrypoints=https,websecure,http,web"
       - "traefik.http.routers.pwa.tls=true"
       - "traefik.http.routers.pwa.tls.certresolver=letsencrypt"
       - "traefik.http.services.pwa.loadbalancer.server.port=8080"
@@ -80,3 +88,8 @@ volumes:
     driver: local
   padloc_attachments:
     driver: local
+
+networks:
+  default:
+  coolify:
+    external: true

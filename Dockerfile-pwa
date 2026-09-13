@@ -37,6 +37,12 @@ COPY assets /padloc/packages/app/assets
 
 WORKDIR /padloc/packages/pwa
 
+ENV PL_SERVER_URL=https://api-pass.feridundogan.com
+ENV PL_PWA_URL=https://pass.feridundogan.com
+
+# Pre-build the PWA bundle during Docker image build
+RUN npm run build
+
 ENTRYPOINT ["npm", "run"]
 
-CMD ["build_and_start"]
+CMD ["start"]

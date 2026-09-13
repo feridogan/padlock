@@ -1,10 +1,10 @@
 {
-    "name": "Padloc",
-    "background_color": "#ffffff",
-    "description": "A modern password manager for individuals and teams",
-    "appId": "app.padloc",
-    "scheme": "padloc",
-    "author": "Martin Kleinschrodt <martin@maklesoft.com>",
-    "icon_background": "#f1f1f1",
-    "terms_of_service": "https://padloc.app/tos"
+    "name": "Pass",
+    "background_color": "#070c1e",
+    "description": "Güvenli Kurumsal Şifre Yöneticisi",
+    "appId": "app.pass",
+    "scheme": "pass",
+    "author": "Feridun Doğan",
+    "icon_background": "#0b132b",
+    "terms_of_service": ""
 }
