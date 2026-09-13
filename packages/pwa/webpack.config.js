@@ -1,5 +1,5 @@
-const { resolve, join } = require("path");
-const { readFileSync, writeFileSync } = require("fs");
+const { resolve, join, isAbsolute } = require("path");
+const { readFileSync, writeFileSync, existsSync } = require("fs");
 const { EnvironmentPlugin } = require("webpack");
 const { InjectManifest } = require("workbox-webpack-plugin");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
@@ -18,10 +18,20 @@ const serverUrl = removeTrailingSlash(
 );
 const pwaUrl = removeTrailingSlash(process.env.PL_PWA_URL || `http://localhost:${process.env.PL_PWA_PORT || 8080}`);
 const rootDir = resolve(__dirname, "../..");
-const assetsDir = resolve(rootDir, process.env.PL_ASSETS_DIR || "assets");
+const rawAssetsDir = process.env.PL_ASSETS_DIR || "assets";
+const assetsDir = isAbsolute(rawAssetsDir)
+    ? (existsSync(rawAssetsDir) ? rawAssetsDir : resolve(rootDir, "assets"))
+    : resolve(rootDir, rawAssetsDir);
 const disableCsp = process.env.PL_PWA_DISABLE_CSP === "true";
 
-const { name, terms_of_service } = require(join(assetsDir, "manifest.json"));
+let manifest = { name: "Kurumsal Kasa", terms_of_service: "" };
+const manifestPath = join(assetsDir, "manifest.json");
+if (existsSync(manifestPath)) {
+    manifest = require(manifestPath);
+} else if (existsSync(resolve(rootDir, "assets/manifest.json"))) {
+    manifest = require(resolve(rootDir, "assets/manifest.json"));
+}
+const { name, terms_of_service } = manifest;
 
 const isBuildingLocally = pwaUrl.startsWith("http://localhost");
 
