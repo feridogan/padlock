@@ -33,6 +33,11 @@ if (existsSync(manifestPath)) {
 }
 const { name, terms_of_service } = manifest;
 
+let iconPath = resolve(assetsDir, "app-icon.png");
+if (!existsSync(iconPath)) {
+    iconPath = resolve(rootDir, "assets/app-icon.png");
+}
+
 const isBuildingLocally = pwaUrl.startsWith("http://localhost");
 
 const htmlMetaTags = disableCsp
@@ -151,7 +156,7 @@ module.exports = {
             short_name: name,
             icons: [
                 {
-                    src: resolve(__dirname, assetsDir, "app-icon.png"),
+                    src: iconPath,
                     sizes: [96, 128, 192, 256, 384, 512],
                 },
             ],
@@ -164,7 +169,7 @@ module.exports = {
         {
             apply(compiler) {
                 compiler.hooks.emit.tapPromise("Generate Favicon", async (compilation) => {
-                    const icon = await sharp(resolve(__dirname, assetsDir, "app-icon.png"))
+                    const icon = await sharp(iconPath)
                         .resize({
                             width: 256,
                             height: 256,
