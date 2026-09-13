@@ -18,6 +18,7 @@ import { formatDateFromNow } from "../lib/util";
 import { until } from "lit/directives/until.js";
 import { ProvisioningStatus } from "@padloc/core/src/provisioning";
 import "./icon";
+import { promptPwaInstall } from "../lib/pwa";
 
 const orgPages = [
     { path: "dashboard", label: $l("Dashboard"), icon: "dashboard" },
@@ -40,7 +41,7 @@ export class Menu extends Routing(StateMixin(LitElement)) {
 
     async handleRoute(
         [page, id, subPage]: [string, string, string],
-        { vault, tag, favorites, recent, attachments, host }: { [prop: string]: string }
+        { vault, tag, favorites, recent, attachments, host }: { [prop: string]: string },
     ) {
         this._expanded.clear();
         switch (page) {
@@ -104,12 +105,12 @@ export class Menu extends Routing(StateMixin(LitElement)) {
                     error.message ||
                         $l(
                             "A newer version of {0} is required to synchronize this vault. Please update to the latest version now!",
-                            process.env.PL_APP_NAME!
+                            process.env.PL_APP_NAME!,
                         ),
                     {
                         title: "Update Required",
                         type: "warning",
-                    }
+                    },
                 );
                 return;
             case ErrorCode.MISSING_ACCESS:
@@ -119,7 +120,7 @@ export class Menu extends Routing(StateMixin(LitElement)) {
                     {
                         title: "Sync Failed",
                         type: "warning",
-                    }
+                    },
                 );
                 return;
             case ErrorCode.DECRYPTION_FAILED:
@@ -127,24 +128,24 @@ export class Menu extends Routing(StateMixin(LitElement)) {
                 alert(
                     error.message ||
                         $l(
-                            "This vault could not be synchronized because you currently don't have access to it's data."
+                            "This vault could not be synchronized because you currently don't have access to it's data.",
                         ),
                     {
                         title: "Sync Failed",
                         type: "warning",
-                    }
+                    },
                 );
                 return;
             default:
                 alert(
                     error.message ||
                         $l(
-                            "An unknown error occured while synchronizing this vault. If this problem persists please contact customer support."
+                            "An unknown error occured while synchronizing this vault. If this problem persists please contact customer support.",
                         ),
                     {
                         title: "Sync Failed",
                         type: "warning",
-                    }
+                    },
                 );
                 return;
         }
@@ -261,23 +262,25 @@ export class Menu extends Routing(StateMixin(LitElement)) {
                 <pl-list itemSelector=".menu-item">
                     <div class="small subtle section-header">${$l("Vaults & Items")}</div>
 
-                    ${currentHost
-                        ? html`
-                              <div
-                                  class="menu-item"
-                                  role="link"
-                                  @click=${() => this._goTo("items", { host: true })}
-                                  aria-selected=${this.selected === "host"}
-                                  ?hidden=${!count.currentHost}
-                              >
-                                  <pl-icon icon="web"></pl-icon>
+                    ${
+                        currentHost
+                            ? html`
+                                  <div
+                                      class="menu-item"
+                                      role="link"
+                                      @click=${() => this._goTo("items", { host: true })}
+                                      aria-selected=${this.selected === "host"}
+                                      ?hidden=${!count.currentHost}
+                                  >
+                                      <pl-icon icon="web"></pl-icon>
 
-                                  <div class="stretch ellipsis">${currentHost}</div>
+                                      <div class="stretch ellipsis">${currentHost}</div>
 
-                                  <div class="small subtle">${count.currentHost}</div>
-                              </div>
-                          `
-                        : ""}
+                                      <div class="small subtle">${count.currentHost}</div>
+                                  </div>
+                              `
+                            : ""
+                    }
 
                     <div
                         class="menu-item"
@@ -329,28 +332,32 @@ export class Menu extends Routing(StateMixin(LitElement)) {
                         <div class="small subtle">${count.attachments}</div>
                     </div>
 
-                    ${mainVault
-                        ? html`
-                              <div
-                                  class="menu-item"
-                                  @click=${() => this._goTo("items", { vault: mainVault.id })}
-                                  aria-selected=${this.selected === `vault/${mainVault.id}`}
-                              >
-                                  <pl-icon icon="vault"></pl-icon>
-                                  <div class="stretch">${$l("My Vault")}</div>
-                                  ${mainVault.error
-                                      ? html`
-                                            <pl-button
-                                                class="small negative borderless skinny negatively-margined"
-                                                @click=${(e: Event) => this._displayVaultError(mainVault, e)}
-                                            >
-                                                <pl-icon icon="error"></pl-icon>
-                                            </pl-button>
-                                        `
-                                      : html` <div class="small subtle">${mainVault.items.size}</div> `}
-                              </div>
-                          `
-                        : ""}
+                    ${
+                        mainVault
+                            ? html`
+                                  <div
+                                      class="menu-item"
+                                      @click=${() => this._goTo("items", { vault: mainVault.id })}
+                                      aria-selected=${this.selected === `vault/${mainVault.id}`}
+                                  >
+                                      <pl-icon icon="vault"></pl-icon>
+                                      <div class="stretch">${$l("My Vault")}</div>
+                                      ${
+                                      mainVault.error
+                                          ? html`
+                                                <pl-button
+                                                    class="small negative borderless skinny negatively-margined"
+                                                    @click=${(e: Event) => this._displayVaultError(mainVault, e)}
+                                                >
+                                                    <pl-icon icon="error"></pl-icon>
+                                                </pl-button>
+                                            `
+                                          : html` <div class="small subtle">${mainVault.items.size}</div> `
+                                  }
+                                  </div>
+                              `
+                            : ""
+                    }
                     ${app.orgs.map((org) => {
                         const vaults = app.vaults.filter((v) => v.org && v.org.id === org.id);
                         const isAdmin = org.isAdmin(app.account!);
@@ -386,17 +393,21 @@ export class Menu extends Routing(StateMixin(LitElement)) {
                                                     <pl-icon icon="vault"></pl-icon>
                                                     <div class="stretch ellipsis">${vault.name}</div>
 
-                                                    ${vault.error
-                                                        ? html`
-                                                              <pl-button
-                                                                  class="small negative borderless skinny negatively-margined"
-                                                                  @click=${(e: Event) =>
+                                                    ${
+                                                        vault.error
+                                                            ? html`
+                                                                  <pl-button
+                                                                      class="small negative borderless skinny negatively-margined"
+                                                                      @click=${(e: Event) =>
                                                                       this._displayVaultError(vault, e)}
-                                                              >
-                                                                  <pl-icon icon="error"></pl-icon>
-                                                              </pl-button>
-                                                          `
-                                                        : html` <div class="small subtle">${vault.items.size}</div> `}
+                                                                  >
+                                                                      <pl-icon icon="error"></pl-icon>
+                                                                  </pl-button>
+                                                              `
+                                                            : html`
+                                                                  <div class="small subtle">${vault.items.size}</div>
+                                                              `
+                                                    }
                                                 </div>
                                             `;
                                         })}
@@ -449,7 +460,7 @@ export class Menu extends Routing(StateMixin(LitElement)) {
 
                                             <div class="small subtle">${count}</div>
                                         </div>
-                                    `
+                                    `,
                                 )}
 
                                 <div class="menu-item subtle" @click=${() => this._goTo(`settings/tags`)}>
@@ -476,49 +487,56 @@ export class Menu extends Routing(StateMixin(LitElement)) {
                                         >
                                             <pl-icon icon="org"></pl-icon>
                                             <div class="stretch ellipsis">${org.name}</div>
-                                            ${app.getOrgProvisioning(org).status !== ProvisioningStatus.Active
-                                                ? html`
-                                                      <pl-icon
-                                                          icon="warning"
-                                                          class="small negative highlighted"
-                                                      ></pl-icon>
-                                                  `
-                                                : ""}
+                                            ${
+                                                app.getOrgProvisioning(org).status !== ProvisioningStatus.Active
+                                                    ? html`
+                                                          <pl-icon
+                                                              icon="warning"
+                                                              class="small negative highlighted"
+                                                          ></pl-icon>
+                                                      `
+                                                    : ""
+                                            }
                                             <pl-icon icon="chevron-down" class="small subtle dropdown-icon"></pl-icon>
                                         </div>
 
                                         <pl-drawer .collapsed=${!this._expanded.has(`org_${org.id}_manage`)}>
                                             <pl-list class="sub-list">
                                                 ${orgPages.map(
-                                                    ({ label, icon, path }) => html` <div
-                                                        class="menu-item"
-                                                        aria-selected=${this.selected === `orgs/${org.id}/${path}`}
-                                                        @click=${() => this._goTo(`orgs/${org.id}/${path}`)}
-                                                        ?hidden=${(["settings", "invites"].includes(path) &&
-                                                            !org.isOwner(account!)) ||
-                                                        (path === "groups" &&
-                                                            !org.groups.length &&
-                                                            app.getOrgFeatures(org).addGroup.hidden)}
-                                                    >
-                                                        <pl-icon icon="${icon}"></pl-icon>
+                                                    ({ label, icon, path }) =>
+                                                        html` <div
+                                                            class="menu-item"
+                                                            aria-selected=${this.selected === `orgs/${org.id}/${path}`}
+                                                            @click=${() => this._goTo(`orgs/${org.id}/${path}`)}
+                                                            ?hidden=${
+                                                            (["settings", "invites"].includes(path) &&
+                                                                !org.isOwner(account!)) ||
+                                                            (path === "groups" &&
+                                                                !org.groups.length &&
+                                                                app.getOrgFeatures(org).addGroup.hidden)
+                                                        }
+                                                        >
+                                                            <pl-icon icon="${icon}"></pl-icon>
 
-                                                        <div class="stretch ellipsis">${label}</div>
+                                                            <div class="stretch ellipsis">${label}</div>
 
-                                                        ${app.getOrgProvisioning(org).status !==
-                                                            ProvisioningStatus.Active && path === "dashboard"
-                                                            ? html`
-                                                                  <pl-icon
-                                                                      icon="warning"
-                                                                      class="small negative highlighted"
-                                                                  ></pl-icon>
-                                                              `
-                                                            : ""}
-                                                    </div>`
+                                                            ${
+                                                            app.getOrgProvisioning(org).status !==
+                                                                ProvisioningStatus.Active && path === "dashboard"
+                                                                ? html`
+                                                                      <pl-icon
+                                                                          icon="warning"
+                                                                          class="small negative highlighted"
+                                                                      ></pl-icon>
+                                                                  `
+                                                                : ""
+                                                        }
+                                                        </div>`,
                                                 )}
                                             </pl-list>
                                         </pl-drawer>
                                     </div>
-                                `
+                                `,
                             )}
 
                         <div
@@ -533,10 +551,11 @@ export class Menu extends Routing(StateMixin(LitElement)) {
                         </div>
                     </pl-list>
 
-                    ${app.authInfo?.invites.length
-                        ? html`
-                              <div class="small subtle section-header">${$l("Invites")}</div>
-                              ${app.authInfo.invites.map(
+                    ${
+                        app.authInfo?.invites.length
+                            ? html`
+                                  <div class="small subtle section-header">${$l("Invites")}</div>
+                                  ${app.authInfo.invites.map(
                                   (invite) => html`
                                       <div
                                           class="menu-item"
@@ -549,10 +568,11 @@ export class Menu extends Routing(StateMixin(LitElement)) {
 
                                           <pl-icon icon="chevron-right" class="small subtle dropdown-icon"></pl-icon>
                                       </div>
-                                  `
+                                  `,
                               )}
-                          `
-                        : ""}
+                              `
+                            : ""
+                    }
 
                     <div class="small subtle section-header">${$l("More")}</div>
 
@@ -588,9 +608,11 @@ export class Menu extends Routing(StateMixin(LitElement)) {
 
                         <div class="stretch">${$l("Settings")}</div>
 
-                        ${app.getAccountProvisioning().status !== ProvisioningStatus.Active
-                            ? html` <pl-icon icon="warning" class="small negative highlighted"></pl-icon> `
-                            : ""}
+                        ${
+                            app.getAccountProvisioning().status !== ProvisioningStatus.Active
+                                ? html` <pl-icon icon="warning" class="small negative highlighted"></pl-icon> `
+                                : ""
+                        }
                     </div>
 
                     <div
@@ -601,6 +623,18 @@ export class Menu extends Routing(StateMixin(LitElement)) {
                         <pl-icon icon="support"></pl-icon>
 
                         <div class="stretch">${$l("Support")}</div>
+                    </div>
+
+                    <div
+                        class="menu-item"
+                        @click=${() => {
+                            this.dispatchEvent(new CustomEvent("toggle-menu", { bubbles: true, composed: true }));
+                            promptPwaInstall();
+                        }}
+                    >
+                        <pl-icon icon="mobile"></pl-icon>
+
+                        <div class="stretch">${$l("Telefona Yükle / PWA")}</div>
                     </div>
 
                     <div class="spacer"></div>
@@ -642,9 +676,9 @@ export class Menu extends Routing(StateMixin(LitElement)) {
                     trigger="hover"
                     .preferAlignment=${["top", "top-left", "top-right"]}
                 >
-                    <strong>${$l("Last Sync:")}</strong> ${app.state.stats.lastSync
-                        ? until(formatDateFromNow(app.state.stats.lastSync), "")
-                        : $l("Never")}
+                    <strong>${$l("Last Sync:")}</strong> ${
+                        app.state.stats.lastSync ? until(formatDateFromNow(app.state.stats.lastSync), "") : $l("Never")
+                    }
                 </pl-popover>
             </div>
         `;

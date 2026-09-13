@@ -82,7 +82,11 @@ export class ServerConfig extends Config {
 
     /** Whether or not to require email verification before creating an account */
     @ConfigParam("boolean")
-    verifyEmailOnSignup = true;
+    verifyEmailOnSignup = false;
+
+    /** Whether or not to disable MFA / OTP requirement for authentication */
+    @ConfigParam("boolean")
+    disableMFA = true;
 
     @ConfigParam("string[]")
     defaultAuthTypes: AuthType[] = [AuthType.Email];
@@ -142,7 +146,10 @@ export class Controller extends API {
     public changeLogger?: ChangeLogger;
     public requestLogger?: RequestLogger;
 
-    constructor(public server: Server, context: Context) {
+    constructor(
+        public server: Server,
+        context: Context,
+    ) {
         super();
         this.context = context;
         this.logger = server.logger.withContext(context);
@@ -209,7 +216,7 @@ export class Controller extends API {
             throw new Err(
                 ErrorCode.MAX_REQUEST_AGE_EXCEEDED,
                 "The request was rejected because it's timestamp is too far in the past. " +
-                    "Please make sure your local clock is set to the correct time and try again!"
+                    "Please make sure your local clock is set to the correct time and try again!",
             );
         }
 
@@ -349,7 +356,7 @@ export class Controller extends API {
                 (typeof type === "undefined" || m.type === type) &&
                 (typeof supportedTypes === "undefined" || supportedTypes.includes(m.type)) &&
                 (purpose === AuthPurpose.TestAuthenticator || m.purposes.includes(purpose)) &&
-                m.status === AuthenticatorStatus.Active
+                m.status === AuthenticatorStatus.Active,
         );
 
         const authenticator = availableAuthenticators[authenticatorIndex || 0];
@@ -372,6 +379,7 @@ export class Controller extends API {
         auth.authRequests.push(request);
 
         const deviceTrusted =
+            this.config.disableMFA ||
             auth.disableMFA ||
             (this.context.device && auth.trustedDevices.some(({ id }) => id === this.context.device!.id));
 
@@ -435,7 +443,7 @@ export class Controller extends API {
         if (request.type !== authenticator.type) {
             throw new Err(
                 ErrorCode.AUTHENTICATION_FAILED,
-                "The auth request type and authenticator type do not match!"
+                "The auth request type and authenticator type do not match!",
             );
         }
 
@@ -543,7 +551,11 @@ export class Controller extends API {
         const auth = await this._getAuth(email);
 
         const deviceTrusted =
-            auth && this.context.device && auth.trustedDevices.some(({ id }) => id === this.context.device!.id);
+            this.config.disableMFA ||
+            Boolean(auth?.disableMFA) ||
+            Boolean(
+                auth && this.context.device && auth.trustedDevices.some(({ id }) => id === this.context.device!.id),
+            );
 
         if (!deviceTrusted) {
             if (!authToken) {
@@ -560,7 +572,7 @@ export class Controller extends API {
         if (asAdmin && !this._isAdmin(email)) {
             throw new Err(
                 ErrorCode.INSUFFICIENT_PERMISSIONS,
-                "This feature is only available for service administrators."
+                "This feature is only available for service administrators.",
             );
         }
 
@@ -594,7 +606,7 @@ export class Controller extends API {
 
     private _buildLocationAndDeviceString(
         locationData: { city?: string; country?: string } | undefined,
-        deviceInfo: DeviceInfo | undefined
+        deviceInfo: DeviceInfo | undefined,
     ) {
         const location = locationData ? `${locationData.city}, ${locationData.country}` : $l("unknown location");
         const device = deviceInfo?.description;
@@ -1033,7 +1045,7 @@ export class Controller extends API {
         ) {
             throw new Err(
                 ErrorCode.PROVISIONING_NOT_ALLOWED,
-                "You're not allowed to create an organization right now."
+                "You're not allowed to create an organization right now.",
             );
         }
 
@@ -1125,7 +1137,7 @@ export class Controller extends API {
         if (minMemberUpdated < org.minMemberUpdated) {
             throw new Err(
                 ErrorCode.BAD_REQUEST,
-                "`minMemberUpdated` property needs to be equal to or larger than the previous one!"
+                "`minMemberUpdated` property needs to be equal to or larger than the previous one!",
             );
         }
 
@@ -1150,7 +1162,7 @@ export class Controller extends API {
         ) {
             throw new Err(
                 ErrorCode.INSUFFICIENT_PERMISSIONS,
-                "Only organization owners can add or remove members, change roles or create invites!"
+                "Only organization owners can add or remove members, change roles or create invites!",
             );
         }
 
@@ -1162,7 +1174,7 @@ export class Controller extends API {
         ) {
             throw new Err(
                 ErrorCode.PROVISIONING_QUOTA_EXCEEDED,
-                "You have reached the maximum number of members for this organization!"
+                "You have reached the maximum number of members for this organization!",
             );
         }
 
@@ -1170,7 +1182,7 @@ export class Controller extends API {
         if (addedGroups.length && orgProvisioning.quota.groups !== -1 && groups.length > orgProvisioning.quota.groups) {
             throw new Err(
                 ErrorCode.PROVISIONING_QUOTA_EXCEEDED,
-                "You have reached the maximum number of groups for this organization!"
+                "You have reached the maximum number of groups for this organization!",
             );
         }
 
@@ -1241,8 +1253,8 @@ export class Controller extends API {
                                 orgId: org.id,
                                 orgName: org.name,
                                 email: invite.email,
-                            })
-                        )
+                            }),
+                        ),
                     );
 
                     // If account does not exist yet, create a email verification code
@@ -1274,12 +1286,12 @@ export class Controller extends API {
                                 orgName: invite.org.name,
                                 invitedBy: invite.invitedBy!.name || invite.invitedBy!.email,
                                 acceptInviteUrl: `${removeTrailingSlash(
-                                    this.config.clientUrl
+                                    this.config.clientUrl,
                                 )}${path}?${params.toString()}`,
-                            })
+                            }),
                         );
                     } catch (e) {}
-                })()
+                })(),
             );
 
             this.log("org.createInvite", {
@@ -1300,7 +1312,7 @@ export class Controller extends API {
                             throw e;
                         }
                     }
-                })()
+                })(),
             );
             this.log("org.deleteInvite", {
                 org: orgInfo,
@@ -1324,7 +1336,7 @@ export class Controller extends API {
                             throw e;
                         }
                     }
-                })()
+                })(),
             );
             this.log("org.removeMember", {
                 org: orgInfo,
@@ -1343,7 +1355,7 @@ export class Controller extends API {
                         new JoinOrgInviteCompletedMessage({
                             orgName: org.name,
                             openAppUrl: `${removeTrailingSlash(this.config.clientUrl)}/org/${org.id}`,
-                        })
+                        }),
                     );
                 } catch (e) {}
             }
@@ -1382,7 +1394,7 @@ export class Controller extends API {
                     const acc = await this.storage.get(Account, member.accountId!);
                     acc.orgs = acc.orgs.filter(({ id }) => id !== org.id);
                     await this.storage.save(acc);
-                })
+                }),
         );
 
         await this.storage.delete(org);
@@ -1401,7 +1413,7 @@ export class Controller extends API {
         if (org && org.isSuspended(account)) {
             throw new Err(
                 ErrorCode.INSUFFICIENT_PERMISSIONS,
-                "This vault cannot be synchronized because you're suspended from it's organization."
+                "This vault cannot be synchronized because you're suspended from it's organization.",
             );
         }
 
@@ -1435,7 +1447,7 @@ export class Controller extends API {
         if (org && org.isSuspended(account)) {
             throw new Err(
                 ErrorCode.INSUFFICIENT_PERMISSIONS,
-                "This vault cannot be synchronized because you're suspended from it's organization."
+                "This vault cannot be synchronized because you're suspended from it's organization.",
             );
         }
 
@@ -1455,7 +1467,7 @@ export class Controller extends API {
                 ErrorCode.PROVISIONING_NOT_ALLOWED,
                 org
                     ? 'You can not make any updates to a vault while it\'s organization is in "frozen" state!'
-                    : 'You can\'t make any updates to your vault while your account is in "frozen" state!'
+                    : 'You can\'t make any updates to your vault while your account is in "frozen" state!',
             );
         }
 
@@ -1530,7 +1542,7 @@ export class Controller extends API {
         if (orgProvisioning.quota.vaults !== -1 && org.vaults.length > orgProvisioning.quota.vaults) {
             throw new Err(
                 ErrorCode.PROVISIONING_QUOTA_EXCEEDED,
-                "You have reached the maximum number of vaults for this organization!"
+                "You have reached the maximum number of vaults for this organization!",
             );
         }
 
@@ -1642,7 +1654,7 @@ export class Controller extends API {
                         orgName: org.name,
                         invitee: invite.invitee.name || invite.invitee.email,
                         confirmMemberUrl: `${removeTrailingSlash(this.config.clientUrl)}/invite/${org.id}/${invite.id}`,
-                    })
+                    }),
                 );
             } catch (e) {}
         }
@@ -1683,7 +1695,7 @@ export class Controller extends API {
             if (quota !== -1 && usage + att.size > quota * 1e6) {
                 throw new Err(
                     ErrorCode.PROVISIONING_QUOTA_EXCEEDED,
-                    "You have reached the file storage limit for this org!"
+                    "You have reached the file storage limit for this org!",
                 );
             }
         } else {
@@ -1693,7 +1705,7 @@ export class Controller extends API {
             if (quota !== -1 && usage + att.size > quota * 1e6) {
                 throw new Err(
                     ErrorCode.PROVISIONING_QUOTA_EXCEEDED,
-                    "You have reached the file storage limit for this account!"
+                    "You have reached the file storage limit for this account!",
                 );
             }
         }
@@ -1829,7 +1841,7 @@ export class Controller extends API {
 
                         deletedVaults.add(vaultInfo.id);
                     }
-                })()
+                })(),
             );
         }
 
@@ -1860,7 +1872,7 @@ export class Controller extends API {
 
                         deletedMembers.add(member.accountId!);
                     }
-                })()
+                })(),
             );
         }
 
@@ -1873,7 +1885,7 @@ export class Controller extends API {
     async createKeyStoreEntry({ data, authenticatorId }: CreateKeyStoreEntryParams) {
         const { account, auth } = this._requireAuth();
         const authenticator = auth.authenticators.find(
-            (a) => a.id === authenticatorId && a.purposes.includes(AuthPurpose.AccessKeyStore)
+            (a) => a.id === authenticatorId && a.purposes.includes(AuthPurpose.AccessKeyStore),
         );
         if (!authenticator) {
             throw new Err(ErrorCode.NOT_FOUND, "No suitable authenticator found!");
@@ -1921,7 +1933,7 @@ export class Controller extends API {
         if (entry.accountId !== account.id) {
             throw new Err(
                 ErrorCode.INSUFFICIENT_PERMISSIONS,
-                "You don't have the necessary permissions to perform this action!"
+                "You don't have the necessary permissions to perform this action!",
             );
         }
 
@@ -1980,7 +1992,7 @@ export class Controller extends API {
             if (!this._isAdmin(account.email)) {
                 throw new Err(
                     ErrorCode.INSUFFICIENT_PERMISSIONS,
-                    "You don't have the necessary permissions to use this feature!"
+                    "You don't have the necessary permissions to use this feature!",
                 );
             } else if (!session.asAdmin) {
                 throw new Err(ErrorCode.INVALID_SESSION, "Your current session is not valid in this context!");
@@ -2001,7 +2013,7 @@ export class Controller extends API {
         ];
 
         const adHocAuthenticators = await Promise.all(
-            this.config.defaultAuthTypes.map((type) => this._createAdHocAuthenticator(auth, purposes, type))
+            this.config.defaultAuthTypes.map((type) => this._createAdHocAuthenticator(auth, purposes, type)),
         );
 
         const authenticators = [
@@ -2064,7 +2076,7 @@ export class Controller extends API {
         // Revoke unused sessions older than 2 weeks
         const expiredSessions = auth.sessions.filter(
             (session) =>
-                Math.max(session.created.getTime(), session.lastUsed.getTime()) < Date.now() - 14 * 24 * 60 * 60 * 1000
+                Math.max(session.created.getTime(), session.lastUsed.getTime()) < Date.now() - 14 * 24 * 60 * 60 * 1000,
         );
         for (const session of expiredSessions) {
             await this.storage.delete(Object.assign(new Session(), session));
@@ -2074,7 +2086,7 @@ export class Controller extends API {
 
         // Remove pending auth requests older than 1 hour
         const expiredAuthRequests = auth.authRequests.filter(
-            (authRequest) => authRequest.created.getTime() < Date.now() - 1 * 60 * 60 * 1000
+            (authRequest) => authRequest.created.getTime() < Date.now() - 1 * 60 * 60 * 1000,
         );
         for (const authRequest of expiredAuthRequests) {
             await this.storage.delete(authRequest);
@@ -2084,7 +2096,7 @@ export class Controller extends API {
 
         // Remove pending srp sessions older than 1 hour
         const expiredSRPSessions = auth.srpSessions.filter(
-            (SRPSession) => SRPSession.created.getTime() < Date.now() - 1 * 60 * 60 * 1000
+            (SRPSession) => SRPSession.created.getTime() < Date.now() - 1 * 60 * 60 * 1000,
         );
         for (const srpSession of expiredSRPSessions) {
             await this.storage.delete(srpSession);
@@ -2111,7 +2123,7 @@ export class Controller extends API {
         if (!provider) {
             throw new Err(
                 ErrorCode.NOT_SUPPORTED,
-                `This multi factor authentication type is not supported by this server!`
+                `This multi factor authentication type is not supported by this server!`,
             );
         }
         return provider;
@@ -2141,7 +2153,7 @@ export class Controller extends API {
                 (typeof requestId === "undefined" || r.id === requestId) &&
                 r.token === token &&
                 r.status === AuthRequestStatus.Verified &&
-                r.purpose === purpose
+                r.purpose === purpose,
         );
 
         if (!request) {
@@ -2182,7 +2194,7 @@ export class Server {
         public provisioner: Provisioner = new StubProvisioner(),
         public changeLogger?: ChangeLogger,
         public requestLogger?: RequestLogger,
-        public legacyServer?: LegacyServer
+        public legacyServer?: LegacyServer,
     ) {}
 
     private _requestQueue = new Map<AccountID | OrgID, Promise<void>>();
@@ -2264,7 +2276,7 @@ export class Server {
                       ErrorCode.SERVER_ERROR,
                       "Something went wrong while we were processing your request. " +
                           "Our team has been notified and will resolve the problem as soon as possible!",
-                      { report: true, error }
+                      { report: true, error },
                   );
 
         res.error = {
@@ -2298,7 +2310,7 @@ export class Server {
                             }\n${optionalParams}Device Info:\n${
                                 req.device && JSON.stringify(req.device?.toRaw(), null, 4)
                             }\n${e.toString()}${evt?.id ? `Event ID: ${evt.id}` : ""}`,
-                        })
+                        }),
                     );
                 } catch (e) {}
             }

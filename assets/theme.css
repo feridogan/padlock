@@ -35,45 +35,45 @@ body {
 
     --letter-spacing: 0.01em;
 
-    /* BASIC COLORS */
+    /* BASIC COLORS: SARI & LACIVERT */
 
-    --color-highlight: rgb(59, 183, 249);
-    --color-highlight-light: rgb(89, 198, 255);
-    --color-highlight-dark: rgb(7, 124, 185);
-    --color-highlight-bg: rgb(59, 183, 249, 0.1);
+    --color-highlight: #f5b700;
+    --color-highlight-light: #ffd000;
+    --color-highlight-dark: #d49b00;
+    --color-highlight-bg: rgba(245, 183, 0, 0.15);
 
-    --color-background: var(--color-white);
-    --color-background-light: var(--color-white);
-    --color-background-dark: var(--color-white-dark);
-    --color-background-darker: var(--color-white-darker);
+    --color-background: #0b132b;
+    --color-background-light: #162248;
+    --color-background-dark: #070c1e;
+    --color-background-darker: #040714;
 
-    --color-foreground: var(--color-black);
-    --color-foreground-light: var(--color-black-light);
-    --color-foreground-dark: var(--color-black-dark);
+    --color-foreground: #f8fafc;
+    --color-foreground-light: #94a3b8;
+    --color-foreground-dark: #ffffff;
 
-    --color-negative: #ff6666;
+    --color-negative: #ef4444;
 
-    --color-favorite: var(--color-negative);
+    --color-favorite: #f5b700;
 
-    --color-shade-1: rgba(0, 0, 0, 0.05);
-    --color-shade-2: rgba(0, 0, 0, 0.1);
-    --color-shade-3: rgba(0, 0, 0, 0.15);
-    --color-shade-4: rgba(0, 0, 0, 0.2);
-    --color-shade-5: rgba(0, 0, 0, 0.25);
-    --color-shade-6: rgba(0, 0, 0, 0.3);
+    --color-shade-1: rgba(245, 183, 0, 0.05);
+    --color-shade-2: rgba(245, 183, 0, 0.1);
+    --color-shade-3: rgba(245, 183, 0, 0.15);
+    --color-shade-4: rgba(245, 183, 0, 0.2);
+    --color-shade-5: rgba(245, 183, 0, 0.25);
+    --color-shade-6: rgba(245, 183, 0, 0.3);
 
     /* BORDERS */
 
     --border-width: 1px;
-    --border-color: var(--color-shade-1);
-    --border-radius: 0.5em;
+    --border-color: rgba(245, 183, 0, 0.2);
+    --border-radius: 0.6em;
 
     /* INPUT ELEMENTS */
 
-    --input-padding: 0.8em;
+    --input-padding: 0.85em;
 
-    --input-background: transparent;
-    --input-border-color: var(--border-color);
+    --input-background: rgba(7, 12, 30, 0.65);
+    --input-border-color: rgba(245, 183, 0, 0.28);
     --input-border-style: solid;
     --input-border-width: 1px;
     --input-color: var(--color-foreground);
@@ -85,47 +85,47 @@ body {
 
     /* BUTTONS */
 
-    --button-padding: 0.7em;
+    --button-padding: 0.75em;
     --button-padding-slim: 0.5em;
-    --button-padding-skinny: 0.3em;
+    --button-padding-skinny: 0.35em;
 
-    --button-shadow: none;
+    --button-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
 
-    --button-background: var(--color-shade-1);
+    --button-background: rgba(245, 183, 0, 0.12);
     --button-color: var(--color-foreground);
-    --button-border-color: transparent;
+    --button-border-color: rgba(245, 183, 0, 0.25);
     --button-border-style: solid;
     --button-border-width: 1px;
-    --button-font-weight: 400;
+    --button-font-weight: 500;
     --button-focus-outline-color: var(--color-highlight);
 
     --button-toggled-background: var(--color-highlight);
-    --button-toggled-color: var(--color-white);
+    --button-toggled-color: #070c1e;
     --button-toggled-border-color: transparent;
     --button-toggled-border-style: solid;
     --button-toggled-border-width: 1px;
-    --button-toggled-weight: 400;
-    --button-toggled-focus-outline-color: var(--color-white);
+    --button-toggled-weight: 600;
+    --button-toggled-focus-outline-color: var(--color-highlight);
 
     --button-primary-background: var(--color-highlight);
-    --button-primary-color: var(--color-white);
-    --button-primary-border-color: transparent;
+    --button-primary-color: #070c1e;
+    --button-primary-border-color: var(--color-highlight);
     --button-primary-border-style: solid;
     --button-primary-border-width: 1px;
-    --button-primary-font-weight: 400;
-    --button-primary-focus-outline-color: currentColor;
+    --button-primary-font-weight: 700;
+    --button-primary-focus-outline-color: var(--color-highlight-light);
 
-    --button-ghost-background: var(--color-background);
+    --button-ghost-background: transparent;
     --button-ghost-color: var(--color-foreground);
-    --button-ghost-border-color: var(--border-color);
+    --button-ghost-border-color: rgba(245, 183, 0, 0.3);
     --button-ghost-border-style: solid;
     --button-ghost-border-width: 1px;
-    --button-ghost-font-weight: 400;
+    --button-ghost-font-weight: 500;
     --button-ghost-focus-outline-color: var(--color-highlight);
 
-    --button-ghost-toggled-background: var(--button-ghost-background);
+    --button-ghost-toggled-background: var(--color-highlight-bg);
     --button-ghost-toggled-color: var(--color-highlight);
-    --button-ghost-toggled-border-color: var(--color-highlight-light);
+    --button-ghost-toggled-border-color: var(--color-highlight);
     --button-ghost-toggled-border-style: solid;
     --button-ghost-toggled-border-width: 1px;
     --button-ghost-toggled-font-weight: 600;
@@ -136,7 +136,7 @@ body {
     --button-negative-border-color: transparent;
     --button-negative-border-style: solid;
     --button-negative-border-width: 1px;
-    --button-negative-font-weight: 400;
+    --button-negative-font-weight: 500;
     --button-negative-focus-outline-color: var(--color-white);
 
     --button-transparent-color: var(--color-foreground);
@@ -179,51 +179,47 @@ body {
     --start-background: var(--color-background-dark);
     --start-logo-height: 4.5em;
     --start-logo-width: auto;
-    /* --start-form-shadow: rgb(0 0 0 / 10%) 0px 0px 2em -1em; */
-    --start-form-shadow: var(--border-color) 0 0 0 1px;
-    /* --start-form-shadow: #f2711c 0px 0px 0px 1px inset, #f2711c 1px 1px 0px 0px, #a333c8 2px 2px 0px 0px, */
-    /* #2185d0 3px 3px 0px 0px, #21ba45 4px 4px 0px 0px; */
+    --start-form-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(245, 183, 0, 0.25);
     --start-form-background: var(--color-background);
 
     /* MENU */
 
-    --menu-width: 250px;
+    --menu-width: 260px;
     --menu-logo-height: 2.5em;
     --menu-logo-width: auto;
     --menu-background: var(--color-background-dark);
     --menu-item-background: transparent;
     --menu-item-color: var(--color-foreground);
-    --menu-item-weight: 400;
+    --menu-item-weight: 500;
     --menu-item-selected-background: var(--color-highlight-bg);
-    --menu-item-selected-color: var(--color-highlight-dark);
-    --menu-item-selected-weight: 600;
-    --menu-footer-border: none;
-    --menu-footer-button-padding: --button-padding-slim;
+    --menu-item-selected-color: var(--color-highlight);
+    --menu-item-selected-weight: 700;
+    --menu-footer-border: 1px solid rgba(245, 183, 0, 0.15);
+    --menu-footer-button-padding: var(--button-padding-slim);
     --menu-footer-button-width: auto;
-    --menu-footer-button-color: var(--button-color);
+    --menu-footer-button-color: var(--color-highlight);
     --menu-footer-button-icon-size: initial;
     --menu-footer-button-label-size: 0;
 
     /* VAULT ITEMS LIST */
 
-    --items-list-item-border-color: var(--border-color);
+    --items-list-item-border-color: rgba(245, 183, 0, 0.1);
     --items-list-item-field-border-style: none;
     --items-list-item-field-border-width: 1px;
     --items-list-item-field-border-color: var(--border-color);
     --items-list-item-field-spacing: var(--spacing);
-    --items-list-item-field-name-weight: 400;
+    --items-list-item-field-name-weight: 500;
     --items-list-item-field-value-weight: 400;
 
     /* ITEM VIEW */
 
     --item-view-field-name-color: var(--color-highlight);
-    --item-view-field-name-weight: 400;
+    --item-view-field-name-weight: 500;
 
     /* APP */
     --app-backdrop-background: var(--color-background-darker);
     --app-backdrop-color: var(--color-highlight);
-    /* --app-wrapper-shadow: rgb(0 0 0 / 10%) 0px 0px 2em -0.5em; */
-    --app-wrapper-shadow: var(--border-color) 0 0 0 1px;
+    --app-wrapper-shadow: 0 10px 35px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(245, 183, 0, 0.2);
 
     /* LAYOUT */
 
@@ -237,25 +233,25 @@ body {
     /* HEADERS */
 
     --header-title-size: initial;
-    --header-title-weight: var(--font-weight-semibold);
+    --header-title-weight: var(--font-weight-bold);
 }
 
 body.theme-dark {
-    --color-white: #e1e1e1;
+    --color-background: #070c1e;
+    --color-background-light: #0b132b;
+    --color-background-dark: #050814;
+    --color-background-darker: #02040a;
 
-    --color-background: #252525;
-    --color-background-light: #333;
-    --color-background-dark: #212121;
-    --color-background-darker: #111;
+    --color-foreground: #ffffff;
+    --color-foreground-light: #94a3b8;
+    --color-foreground-dark: #ffffff;
 
-    --color-foreground: var(--color-white);
-    --color-foreground-light: var(--color-white-light);
-    --color-foreground-dark: var(--color-white-dark);
+    --color-highlight: #f5b700;
+    --color-highlight-light: #ffd000;
+    --color-highlight-dark: #d49b00;
+    --color-highlight-bg: rgba(245, 183, 0, 0.18);
 
-    --color-shade-1: rgba(255, 255, 255, 0.05);
-    --color-shade-2: rgba(255, 255, 255, 0.1);
-    --color-shade-3: rgba(255, 255, 255, 0.15);
-    --color-shade-4: rgba(255, 255, 255, 0.2);
-    --color-shade-5: rgba(255, 255, 255, 0.25);
-    --color-shade-6: rgba(255, 255, 255, 0.3);
+    --border-color: rgba(245, 183, 0, 0.25);
+    --start-form-background: #0b132b;
+    --menu-background: #050814;
 }

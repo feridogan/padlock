@@ -52,7 +52,7 @@ export class SMTPSender implements Messenger {
         this._transporter = createTransport({
             host: config.host,
             port: config.port,
-            secure: config.secure,
+            secure: config.secure || config.port === 465,
             auth: auth,
             ignoreTLS: config.ignoreTLS,
         } as TransportOptions);

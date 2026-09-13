@@ -199,5 +199,44 @@ export function getConfig() {
     const path = envFile && resolve(process.cwd(), envFile);
     const override = process.argv.includes("--env-override");
     dotenv.config({ override, path });
-    return new PadlocConfig().fromEnv(process.env as { [v: string]: string }, "PL_");
+
+    const env = process.env as { [v: string]: string };
+
+    // Support standard SMTP environment variables fallback
+    if (!env.PL_EMAIL_SMTP_HOST && env.SMTP_HOST) {
+        env.PL_EMAIL_SMTP_HOST = env.SMTP_HOST;
+    }
+    if (!env.PL_EMAIL_SMTP_PORT && env.SMTP_PORT) {
+        env.PL_EMAIL_SMTP_PORT = env.SMTP_PORT;
+    }
+    if (!env.PL_EMAIL_SMTP_USER && env.SMTP_USER) {
+        env.PL_EMAIL_SMTP_USER = env.SMTP_USER;
+    }
+    if (!env.PL_EMAIL_SMTP_PASSWORD && (env.SMTP_PASS || env.SMTP_PASSWORD)) {
+        env.PL_EMAIL_SMTP_PASSWORD = env.SMTP_PASS || env.SMTP_PASSWORD;
+    }
+    if (!env.PL_EMAIL_SMTP_SECURE && env.SMTP_SECURE) {
+        env.PL_EMAIL_SMTP_SECURE = env.SMTP_SECURE;
+    }
+    if (!env.PL_EMAIL_SMTP_FROM && (env.SMTP_FROM || env.MAIL_FROM)) {
+        env.PL_EMAIL_SMTP_FROM = env.SMTP_FROM || env.MAIL_FROM;
+    }
+
+    // If SMTP host is configured but PL_EMAIL_BACKEND is not explicitly set, auto-select smtp
+    if ((env.PL_EMAIL_SMTP_HOST || env.SMTP_HOST) && !env.PL_EMAIL_BACKEND) {
+        env.PL_EMAIL_BACKEND = "smtp";
+    }
+
+    // Support standard PORT fallback
+    if (!env.PL_TRANSPORT_HTTP_PORT && env.PORT) {
+        env.PL_TRANSPORT_HTTP_PORT = env.PORT;
+    }
+
+    const config = new PadlocConfig().fromEnv(env, "PL_");
+
+    if (config.email.backend === "smtp" && !config.email.smtp) {
+        config.email.smtp = new SMTPConfig().fromEnv(env, "PL_EMAIL_SMTP_");
+    }
+
+    return config;
 }

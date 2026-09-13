@@ -111,10 +111,10 @@ export class Index extends Serializable {
                                     const hashedHost = await crypto.deriveKey(stringToBytes(host), this.hashParams);
 
                                     return bytesToBase64(hashedHost);
-                                })
+                                }),
                         )
                     ).filter((h) => h !== null) as string[],
-                }))
+                })),
             )
         ).filter((item) => item.hosts.length);
     }
@@ -147,7 +147,7 @@ export class Index extends Serializable {
 
                     return currentDomainParts;
                 },
-                [domain.join(".")]
+                [domain.join(".")],
             )
             .map((subdomain) => `*.${subdomain}`); // prefix all subdomains with `*.` (can't be done above otherwise you get things like *.login.*.accounts.*.google.com)
 
@@ -169,7 +169,7 @@ export class Index extends Serializable {
 
         const domainsMatches = (await Promise.all(domains.map(async (domain) => await this.matchHost(domain)))).reduce(
             (previousCount, currentCount) => previousCount + currentCount,
-            0
+            0,
         );
 
         return domainsMatches;
@@ -342,7 +342,7 @@ export class App {
 
     constructor(
         /** Data transport provider */
-        sender: Sender
+        sender: Sender,
     ) {
         this.api = new Client(this.state, sender, (_req, _res, err) => {
             const offline = err?.code === ErrorCode.FAILED_CONNECTION;
@@ -499,7 +499,7 @@ export class App {
         await this.loaded;
         if (!this.state.locked) {
             await this.state.index.fromItems(
-                this.state.vaults.reduce((items, v) => [...items, ...v.items], [] as VaultItem[])
+                this.state.vaults.reduce((items, v) => [...items, ...v.items], [] as VaultItem[]),
             );
         }
 
@@ -660,7 +660,7 @@ export class App {
         email: string;
         password: string;
         name: string;
-        authToken: string;
+        authToken?: string;
         invite?: { id: string; org: string };
     }) {
         // Inialize account object
@@ -685,7 +685,7 @@ export class App {
                 auth,
                 authToken,
                 invite,
-            })
+            }),
         );
 
         // Sign into new account
@@ -713,7 +713,7 @@ export class App {
             // Fetch authentication info
             this._cachedStartCreateSessionResponses.set(
                 email,
-                await this.api.startCreateSession(new StartCreateSessionParams({ email, authToken, asAdmin }))
+                await this.api.startCreateSession(new StartCreateSessionParams({ email, authToken, asAdmin })),
             );
         }
 
@@ -732,7 +732,7 @@ export class App {
 
         // Create session object
         const session = await this.api.completeCreateSession(
-            new CompleteCreateSessionParams({ accountId: accId, A: srp.A!, M: srp.M1!, addTrustedDevice, srpId })
+            new CompleteCreateSessionParams({ accountId: accId, A: srp.A!, M: srp.M1!, addTrustedDevice, srpId }),
         );
 
         // Apply session key and update state
@@ -807,7 +807,7 @@ export class App {
                 new UpdateAuthParams({
                     verifier: auth.verifier,
                     keyParams: auth.keyParams,
-                })
+                }),
             );
         });
 
@@ -960,7 +960,7 @@ export class App {
                 account,
                 auth,
                 verify,
-            })
+            }),
         );
 
         // Sign in user using the new password
@@ -1017,7 +1017,7 @@ export class App {
         await container.setData(this.account.masterKey!);
 
         const keyStoreEntry = await this.api.createKeyStoreEntry(
-            new CreateKeyStoreEntryParams({ authenticatorId, data: key })
+            new CreateKeyStoreEntryParams({ authenticatorId, data: key }),
         );
 
         container.authenticatorId = authenticatorId;
@@ -1046,7 +1046,7 @@ export class App {
 
         const encryptedMasterKey = this.state.rememberedMasterKey;
         const { data: key } = await this.api.getKeyStoreEntry(
-            new GetKeyStoreEntryParams({ id: this.state.rememberedMasterKey?.keyStoreId, authToken })
+            new GetKeyStoreEntryParams({ id: this.state.rememberedMasterKey?.keyStoreId, authToken }),
         );
         await encryptedMasterKey.unlock(key);
         const masterKey = await encryptedMasterKey.getData();
@@ -1085,7 +1085,7 @@ export class App {
         name: string,
         org: Org,
         members: { email: string; accountId?: AccountID; readonly: boolean }[] = [],
-        groups: { name: string; readonly: boolean }[] = []
+        groups: { name: string; readonly: boolean }[] = [],
     ): Promise<Vault> {
         if (!members.length && !groups.length) {
             throw new Error("You have to assign at least one member or group!");
@@ -1136,7 +1136,7 @@ export class App {
         /** Organization members that should have access to the vault */
         members: { email: string; id?: AccountID; readonly: boolean }[] = [],
         /** Groups that should have access to the vault */
-        groups: { name: string; readonly: boolean }[] = []
+        groups: { name: string; readonly: boolean }[] = [],
     ) {
         if (!members.length && !groups.length) {
             throw new Error("You have to assign at least one member or group!");
@@ -1276,9 +1276,9 @@ export class App {
                     e.code,
                     org?.canRead(vault, this.account)
                         ? $l(
-                              "You have been granted access to this vault, but before you can see its contents somebody else with access to it has to log into their account first. Once you have full access, this warning will disappear automatically."
+                              "You have been granted access to this vault, but before you can see its contents somebody else with access to it has to log into their account first. Once you have full access, this warning will disappear automatically.",
                           )
-                        : $l("This vault could not be synchronized because you no longer have access to it.")
+                        : $l("This vault could not be synchronized because you no longer have access to it."),
                 );
             }
 
@@ -1354,9 +1354,9 @@ export class App {
                     e.code,
                     org?.canRead(vault, account)
                         ? $l(
-                              "You have been granted access to this vault, but before you can see its contents somebody else with access to it has to log into their account first. Once you have full access, this warning will disappear automatically."
+                              "You have been granted access to this vault, but before you can see its contents somebody else with access to it has to log into their account first. Once you have full access, this warning will disappear automatically.",
                           )
-                        : $l("This vault could not be synchronized because you no longer have access to it.")
+                        : $l("This vault could not be synchronized because you no longer have access to it."),
                 );
             }
             vault.error = e;
@@ -1402,8 +1402,8 @@ export class App {
                     throw new Err(
                         ErrorCode.OUTDATED_REVISION,
                         $l(
-                            `Local changes to this vault could not be synchronized because there was a problem retrieving information for this vault's organization. If this problem persists please contact customer support!`
-                        )
+                            `Local changes to this vault could not be synchronized because there was a problem retrieving information for this vault's organization. If this problem persists please contact customer support!`,
+                        ),
                     );
                 }
 
@@ -1424,14 +1424,14 @@ export class App {
                 if (provisioning?.status === ProvisioningStatus.Frozen) {
                     throw new Err(
                         ErrorCode.PROVISIONING_NOT_ALLOWED,
-                        $l("Syncing local changes failed because the organization this vault belongs to is frozen.")
+                        $l("Syncing local changes failed because the organization this vault belongs to is frozen."),
                     );
                 }
 
                 if (!org.canWrite(vault, account)) {
                     throw new Err(
                         ErrorCode.INSUFFICIENT_PERMISSIONS,
-                        $l("Syncing local changes failed because you don't have write permissions for this vault.")
+                        $l("Syncing local changes failed because you don't have write permissions for this vault."),
                     );
                 }
 
@@ -1584,7 +1584,7 @@ export class App {
             expiresAfter?: number;
         },
         save = true,
-        sync = true
+        sync = true,
     ) {
         const { vault } = this.getItem(item.id)!;
         const newItem = new VaultItem({
@@ -1648,7 +1648,7 @@ export class App {
                     vault.items.remove(...items);
                     await this.saveVault(vault);
                     this.syncVault(vault);
-                })()
+                })(),
             );
         }
 
@@ -1889,7 +1889,7 @@ export class App {
         org: Org,
         name: string,
         members: { email: string }[],
-        vaults: { id: VaultID; readonly: boolean }[]
+        vaults: { id: VaultID; readonly: boolean }[],
     ) {
         if (name.toLowerCase() === "new") {
             throw $l("This group name is not available!");
@@ -1918,7 +1918,7 @@ export class App {
             members,
             vaults,
             name: newName,
-        }: { members?: { email: string }[]; vaults?: { id: VaultID; readonly: boolean }[]; name?: string }
+        }: { members?: { email: string }[]; vaults?: { id: VaultID; readonly: boolean }[]; name?: string },
     ) {
         await this.updateOrg(org.id, async (org) => {
             const group = org.getGroup(name);
@@ -1959,7 +1959,7 @@ export class App {
             groups?: string[];
             role?: OrgRole;
             status?: OrgMemberStatus;
-        }
+        },
     ): Promise<OrgMember> {
         if (!this.account || this.account.locked) {
             throw "App needs to be logged in and unlocked to update an organization member!";
@@ -2110,7 +2110,7 @@ export class App {
     async deleteInvite(invite: Invite): Promise<void> {
         await this.updateOrg(
             invite.org!.id,
-            async (org) => (org.invites = org.invites.filter((inv) => inv.id !== invite.id))
+            async (org) => (org.invites = org.invites.filter((inv) => inv.id !== invite.id)),
         );
     }
 
@@ -2253,7 +2253,7 @@ export class App {
                 this._activeSyncPromises.delete(obj.id);
                 this.setState({ syncing: !!this._activeSyncPromises.size });
                 throw e;
-            }
+            },
         );
 
         this._activeSyncPromises.set(obj.id, active);
@@ -2271,7 +2271,7 @@ export class App {
                 } catch (e) {
                     vault.error = e;
                 }
-            })
+            }),
         );
 
         // Notify state change

@@ -6,998 +6,835 @@ import { router } from "../globals";
 import { StartForm } from "./start-form";
 import { Input } from "./input";
 import { Button } from "./button";
-import { alert, choose, dialog, prompt, confirm } from "../lib/dialog";
+import { alert, confirm } from "../lib/dialog";
 import "./logo";
 import { customElement, property, query, state } from "lit/decorators.js";
 import { css, html } from "lit";
-import { completeAuthRequest, startAuthRequest } from "@padloc/core/src/platform";
+import { completeAuthRequest, startAuthRequest, authenticate } from "@padloc/core/src/platform";
 import { mixins } from "../styles";
-import { isTouch, passwordStrength } from "../lib/util";
-import { generatePassphrase } from "@padloc/core/src/diceware";
-import { GeneratorDialog } from "./generator-dialog";
-import "./scroller";
-import { Drawer } from "./drawer";
-import { AccountProvisioning, ProvisioningStatus } from "@padloc/core/src/provisioning";
-import "./rich-content";
-import { displayProvisioning } from "../lib/provisioning";
-import { StartAuthRequestResponse } from "@padloc/core/src/api";
-import { Confetti } from "./confetti";
-import { singleton } from "../lib/singleton";
-import { PBES2Container } from "@padloc/core/src/container";
-import { importLegacyContainer } from "../lib/import";
+import { promptPwaInstall } from "../lib/pwa";
 import { ACCOUNT_EMAIL_MAX_LENGTH, ACCOUNT_NAME_MAX_LENGTH } from "@padloc/core/src/account";
-import { base64ToString } from "@padloc/core/src/encoding";
+
+type AuthMode = "login" | "signup" | "forgot";
 
 @customElement("pl-login-signup")
 export class LoginOrSignup extends StartForm {
-    readonly routePattern = /^(start|login|signup)(?:\/(consent|choose-password|confirm-password|success))?/;
+    readonly routePattern =
+        /^(start|login|signup|forgot-password)(?:\/(consent|choose-password|confirm-password|success))?/;
 
     @property({ type: Boolean })
     asAdmin = false;
 
     @state()
-    private _page = "";
+    private _mode: AuthMode = "login";
 
     @state()
-    private _step = "";
+    private _loginError = "";
 
     @state()
-    private _password: string = "";
+    private _signupError = "";
 
     @state()
-    private _loginError: string = "";
+    private _forgotSuccess = "";
 
-    private _loginFailedCount = 0;
+    @state()
+    private _forgotError = "";
 
-    @query("#emailInput")
-    private _emailInput: Input;
+    @state()
+    private _forgotStep: 1 | 2 = 1;
 
-    @query("#nameInput")
-    private _nameInput: Input;
-
-    @query("#tosCheckbox")
-    private _tosCheckbox: HTMLInputElement;
+    // Login inputs
+    @query("#loginEmailInput")
+    private _loginEmailInput: Input;
 
     @query("#loginPasswordInput")
     private _loginPasswordInput: Input;
 
-    @query("#repeatPasswordInput")
-    private _repeatPasswordInput: Input;
+    @query("#loginSubmitButton")
+    private _loginSubmitButton: Button;
 
-    @query("#submitEmailButton")
-    private _submitEmailButton: Button;
+    // Signup inputs
+    @query("#signupEmailInput")
+    private _signupEmailInput: Input;
 
-    @query("#loginButton")
-    private _loginButton: Button;
+    @query("#signupNameInput")
+    private _signupNameInput: Input;
 
-    @query("#consentDrawer")
-    private _consentDrawer: Drawer;
+    @query("#signupPasswordInput")
+    private _signupPasswordInput: Input;
 
-    @query("#confirmPasswordButton")
-    private _confirmPasswordButton: Button;
+    @query("#signupRepeatPasswordInput")
+    private _signupRepeatPasswordInput: Input;
 
-    @query("#masterPasswordDrawer")
-    private _masterPasswordDrawer: Drawer;
+    @query("#signupTosCheckbox")
+    private _signupTosCheckbox: HTMLInputElement;
 
-    @singleton("pl-confetti")
-    private _confetti: Confetti;
+    @query("#signupSubmitButton")
+    private _signupSubmitButton: Button;
 
-    @dialog("pl-generator-dialog")
-    private _generatorDialog: GeneratorDialog;
+    // Forgot inputs
+    @query("#forgotEmailInput")
+    private _forgotEmailInput: Input;
+
+    @query("#forgotSendCodeButton")
+    private _forgotSendCodeButton: Button;
+
+    @query("#forgotCodeInput")
+    private _forgotCodeInput: Input;
+
+    @query("#forgotNewPasswordInput")
+    private _forgotNewPasswordInput: Input;
+
+    @query("#forgotRepeatPasswordInput")
+    private _forgotRepeatPasswordInput: Input;
+
+    @query("#forgotResetSubmitButton")
+    private _forgotResetSubmitButton: Button;
 
     async reset() {
         await this.updateComplete;
-        this._emailInput.value = router.params.email || "";
-        this._nameInput.value = router.params.name || "";
-        this._loginPasswordInput.value = "";
-        this._repeatPasswordInput.value = "";
-        this._submitEmailButton.stop();
-        this._tosCheckbox.checked = false;
+        if (this._loginEmailInput) this._loginEmailInput.value = router.params.email || "";
+        if (this._loginPasswordInput) this._loginPasswordInput.value = "";
+        this._loginError = "";
+        this._signupError = "";
+        this._forgotError = "";
+        this._forgotSuccess = "";
+        this._forgotStep = 1;
         super.reset();
     }
 
-    async handleRoute([page, step]: [string, string]) {
-        if (!this._authToken && !(page === "start" || (page === "signup" && step === "success"))) {
-            this.redirect("start");
-            return;
+    async handleRoute([page]: [string, string]) {
+        if (page === "signup") {
+            this._mode = "signup";
+        } else if (page === "forgot-password") {
+            this._mode = "forgot";
+        } else {
+            this._mode = "login";
         }
 
-        if (page === "signup" && !step) {
-            this.redirect("signup/consent");
-            return;
-        }
+        await this.updateComplete;
 
-        if (page === "signup" && step === "confirm-password" && !this._password) {
-            this.redirect("signup/choose-password");
-            return;
-        }
-
-        this._page = page;
-        this._step = step;
-
-        if (this._email && this._emailInput && !this._emailInput.value) {
-            this._emailInput.value = this._email;
-        }
-
-        if (this._name && this._nameInput && !this._nameInput.value) {
-            this._nameInput.value = this._name;
-            this._consentDrawer.updateInnerSize();
-        }
-
-        if (this._page === "start") {
-            const { pendingAuth, pendingAuthData } = await this._getPendingAuth();
-            if (pendingAuth) {
-                this._emailInput.value = pendingAuth.email;
-                this._submitEmailButton.stop();
-                this._submitEmail(pendingAuth, pendingAuthData);
-            }
-        }
-
-        if (this._page === "signup" && this._step === "consent") {
-            this._nameInput?.focus();
-        }
-
-        if (this._page === "signup" && this._step === "choose-password") {
-            !this._password ? this._generatePassphrase() : this._revealPassphrase();
-        }
-
-        if (this._page === "signup" && this._step === "success") {
-            this._confetti.pop();
-        }
-
-        if (this._page === "login") {
-            this._loginPasswordInput?.focus();
+        if (this._email) {
+            if (this._loginEmailInput) this._loginEmailInput.value = this._email;
+            if (this._signupEmailInput) this._signupEmailInput.value = this._email;
+            if (this._forgotEmailInput) this._forgotEmailInput.value = this._email;
         }
     }
 
-    private async _getPendingAuth() {
-        if (!this.router.params.pendingAuth) {
-            return {};
-        }
-
-        try {
-            const pendingAuth = await this.app.storage.get(StartAuthRequestResponse, this.router.params.pendingAuth);
-            const pendingAuthData = this.router.params.pendingAuthData
-                ? JSON.parse(base64ToString(this.router.params.pendingAuthData))
-                : undefined;
-            return { pendingAuth, pendingAuthData };
-        } catch (e) {
-            return {};
-        }
+    private _setMode(mode: AuthMode) {
+        this._mode = mode;
+        this._loginError = "";
+        this._signupError = "";
+        this._forgotError = "";
+        this._forgotSuccess = "";
+        this.requestUpdate();
     }
 
-    private async _authenticate({
-        email,
-        pendingRequest: req,
-        pendingRequestData,
-        authenticatorIndex = 0,
-    }: {
-        email: string;
-        authenticatorIndex?: number;
-        pendingRequest?: StartAuthRequestResponse;
-        pendingRequestData?: any;
-    }): Promise<{
-        email: string;
-        token: string;
-        accountStatus: AccountStatus;
-        provisioning: AccountProvisioning;
-        deviceTrusted: boolean;
-        legacyData?: PBES2Container;
-    } | null> {
-        try {
-            if (!req) {
-                req = await startAuthRequest({
-                    purpose: this.asAdmin ? AuthPurpose.AdminLogin : AuthPurpose.Login,
-                    email: this._emailInput.value,
-                    authenticatorIndex,
-                });
-                await this.app.storage.save(req);
-                this.router.setParams({ pendingAuth: req.id });
-            }
-
-            try {
-                const res = await completeAuthRequest(req, pendingRequestData);
-                return res;
-            } finally {
-                this.router.setParams({ pendingAuth: undefined, pendingAuthData: undefined });
-                this.app.storage.delete(req);
-            }
-        } catch (e: any) {
-            if (e.code === ErrorCode.NOT_FOUND) {
-                await alert(e.message, { title: $l("Authentication Failed"), options: [$l("Cancel")] });
-                return null;
-            }
-
-            const choice = await alert(e.message, {
-                title: $l("Authentication Failed"),
-                options: [$l("Try Again"), $l("Try Another Method"), $l("Cancel")],
-            });
-            switch (choice) {
-                case 0:
-                    return this._authenticate({ email, authenticatorIndex });
-                case 1:
-                    return this._authenticate({ email, authenticatorIndex: authenticatorIndex + 1 });
-                default:
-                    return null;
-            }
-        }
-    }
-
-    private async _submitEmail(pendingRequest?: StartAuthRequestResponse, pendingRequestData?: any): Promise<void> {
-        if (this._submitEmailButton.state === "loading") {
+    /* -------------------------------------------------------------
+       1. DOĞRUDAN GİRİŞ (LOGIN)
+       ------------------------------------------------------------- */
+    private async _handleLogin(): Promise<void> {
+        if (this._loginSubmitButton?.state === "loading") {
             return;
         }
 
-        if (!this._emailInput.reportValidity()) {
-            return;
-        }
+        const email = (this._loginEmailInput?.value || "").trim();
+        const password = this._loginPasswordInput?.value || "";
 
-        const email = this._emailInput.value;
-
-        this._emailInput.blur();
-
-        if (this._emailInput.invalid) {
-            alert($l("Please enter a valid email address!"));
+        if (!email) {
+            this._loginError = $l("Lütfen kullanıcı adı veya e-posta adresinizi girin.");
             this.rumble();
-            this._emailInput.focus();
-            return;
-        }
-
-        this._submitEmailButton.start();
-
-        const authRes = await this._authenticate({ email, pendingRequest, pendingRequestData });
-
-        if (!authRes) {
-            this._submitEmailButton.fail();
-            return;
-        }
-
-        this._submitEmailButton.success();
-
-        if ([ProvisioningStatus.Unprovisioned, ProvisioningStatus.Suspended].includes(authRes.provisioning.status)) {
-            await displayProvisioning(authRes.provisioning);
-            return;
-        }
-
-        if (authRes.accountStatus === AccountStatus.Unregistered && authRes.legacyData) {
-            this._migrateLegacyAccount(authRes);
-            return;
-        }
-
-        router.go(
-            authRes.accountStatus === AccountStatus.Active
-                ? "login"
-                : authRes.provisioning.skipTos
-                ? "signup/choose-password"
-                : "signup",
-            {
-                ...this.router.params,
-                email,
-                name: authRes.provisioning.name || "",
-                authToken: authRes.token,
-                deviceTrusted: authRes.deviceTrusted.toString(),
-            }
-        );
-    }
-
-    private async _accountDoesntExist(email: string) {
-        const signup = await confirm(
-            $l("An account with this email address does not exist!"),
-            $l("Sign Up"),
-            $l("Cancel"),
-            {
-                icon: "info",
-            }
-        );
-        if (signup) {
-            router.go("start", { email });
-        }
-    }
-
-    private async _login(): Promise<void> {
-        if (this._loginButton.state === "loading") {
-            return;
-        }
-
-        if (!this._emailInput.reportValidity()) {
-            return;
-        }
-
-        this._emailInput.blur();
-        this._loginPasswordInput.blur();
-
-        const email = this._emailInput.value;
-        let password = this._loginPasswordInput.value;
-
-        if (this._emailInput.invalid) {
-            await alert($l("Please enter a valid email address!"));
-            this.go("start");
+            this._loginEmailInput?.focus();
             return;
         }
 
         if (!password) {
-            this._loginError = $l("Please enter your master password!");
+            this._loginError = $l("Lütfen şifrenizi girin.");
             this.rumble();
-            this._loginPasswordInput.focus();
+            this._loginPasswordInput?.focus();
             return;
         }
 
         this._loginError = "";
-        this._loginButton.start();
+        this._loginSubmitButton?.start();
+
         try {
-            let addTrustedDevice = false;
-            if (!this._deviceTrusted) {
-                addTrustedDevice = await confirm(
-                    $l("Do you want to add this device as a trusted device?"),
-                    $l("Yes"),
-                    $l("No"),
-                    { title: $l("Add Trusted Device") }
-                );
-            }
             await this.app.login({
                 email,
                 password,
-                authToken: this._authToken,
-                addTrustedDevice,
+                authToken: this._authToken || "",
+                addTrustedDevice: true,
                 asAdmin: this.asAdmin,
             });
-            this._loginButton.success();
-            const { email: _email, authToken, deviceTrusted, invite: _invite, ...params } = this.router.params;
+
+            this._loginSubmitButton?.success();
             const invite = this._invite;
+            const { email: _e, authToken: _a, ...params } = this.router.params;
             this.go(invite ? `invite/${invite.orgId}/${invite.id}` : "items", params);
         } catch (e: any) {
+            this._loginSubmitButton?.fail();
+            this.rumble();
+
             switch (e.code) {
-                case ErrorCode.AUTHENTICATION_REQUIRED:
-                    this._loginButton.stop();
-
-                    await alert($l("We failed to verify your email address. Please start over!"), {
-                        type: "warning",
-                        title: $l("Authentication Failed"),
-                    });
-
-                    this.go("start", { email });
-
-                    return;
                 case ErrorCode.INVALID_CREDENTIALS:
-                    this._loginError = $l("Wrong master password. Please try again!");
-                    this._loginButton.fail();
-                    this.rumble();
-
-                    this._loginFailedCount++;
-                    if (this._loginFailedCount > 2) {
-                        const recover = await confirm(
-                            $l("Can't remember your master password?"),
-                            $l("Recover Account"),
-                            $l("Try Again")
-                        );
-                        if (recover) {
-                            router.go("recover", { email });
-                        }
-                    } else {
-                        this._loginPasswordInput.focus();
-                    }
-                    return;
-                case ErrorCode.INVALID_SESSION:
-                    this._loginButton.stop();
-
-                    await alert($l("We failed to verify your session. Please start over!"), {
-                        type: "warning",
-                        title: $l("Authentication Failed"),
-                    });
-
-                    try {
-                        const { pendingAuth } = await this._getPendingAuth();
-                        if (pendingAuth) {
-                            this.router.setParams({ pendingAuth: undefined, pendingAuthData: undefined });
-                            this.app.storage.delete(pendingAuth);
-                        }
-                    } catch (e) {}
-
-                    await this.app.logout();
-
-                    router.go("start", { email });
-                    return;
+                    this._loginError = $l("Hatalı şifre veya kullanıcı adı. Lütfen tekrar deneyin!");
+                    break;
                 case ErrorCode.NOT_FOUND:
-                    this._loginButton.fail();
-                    this._accountDoesntExist(email);
+                    this._loginError = $l("Bu kullanıcı adı veya e-posta ile kayıtlı bir hesap bulunamadı.");
+                    break;
+                case ErrorCode.AUTHENTICATION_REQUIRED:
+                    // MFA zorunlu tutulan hesaplar için OTP doğrulaması tetikle
+                    await this._handleMfaFallback(email, password);
                     return;
                 default:
-                    this._loginButton.stop();
-                    try {
-                        const { pendingAuth } = await this._getPendingAuth();
-                        if (pendingAuth) {
-                            this.router.setParams({ pendingAuth: undefined, pendingAuthData: undefined });
-                            this.app.storage.delete(pendingAuth);
-                        }
-                    } catch (e) {}
-
-                    await this.app.logout();
-
-                    router.go("start", { email });
-                    alert(e.message, { type: "warning" });
-                    throw e;
-            }
-        }
-    }
-
-    private async _submitName() {
-        this.go("signup/choose-password", { ...this.router.params, name: this._nameInput.value });
-    }
-
-    private async _generatePassphrase() {
-        this._password = await generatePassphrase(4, " ", [this.app.state.device.locale]);
-        this._masterPasswordDrawer.updateInnerSize();
-        this._revealPassphrase();
-    }
-
-    private async _revealPassphrase(duration = 2000) {
-        const wrapper = this.renderRoot.querySelector(".master-password")!;
-        wrapper.classList.add("reveal");
-        setTimeout(() => wrapper.classList.remove("reveal"), duration);
-    }
-
-    private async _editMasterPassword(): Promise<void> {
-        const choice = await choose(
-            $l("We recommend using a randomly generated password that is both strong and easy to remember."),
-            [$l("Keep This One"), $l("Generate Another"), $l("Choose My Own")],
-            { title: $l("Want A Different Master Password?") }
-        );
-
-        let newPwd;
-
-        switch (choice) {
-            case 0:
-                break;
-            case 1:
-                newPwd = await this._generatorDialog.show();
-                break;
-            case 2:
-                newPwd = await prompt(
-                    $l("We recommend using a randomly generated password that is both strong and easy to remember."),
-                    { title: $l("Choose Own Master Password"), label: $l("Enter Master Password"), type: "password" }
-                );
-                break;
-        }
-
-        if (newPwd) {
-            const strength = await passwordStrength(newPwd);
-
-            if (strength.score < 2) {
-                const choice = await choose(
-                    $l(
-                        "The password you entered is weak which makes it easier for attackers to break " +
-                            "the encryption used to protect your data. Try to use a longer password or include a " +
-                            "variation of uppercase, lowercase and special characters as well as numbers!"
-                    ),
-                    [$l("Choose Different Password"), $l("Use Anyway")],
-                    {
-                        type: "warning",
-                        title: $l("WARNING: Weak Password"),
-                        icon: null,
-                        preventDismiss: true,
-                    }
-                );
-                if (choice === 0) {
-                    return this._editMasterPassword();
-                }
+                    this._loginError = e.message || $l("Giriş yapılamadı. Lütfen bilgilerinizi kontrol edin.");
+                    break;
             }
 
-            this._password = newPwd;
-            this._revealPassphrase();
+            this._loginPasswordInput?.focus();
         }
     }
 
-    private _submitPassword() {
-        this.go("signup/confirm-password");
-        this._repeatPasswordInput.focus();
-    }
-
-    private async _confirmPassword() {
-        if (this._confirmPasswordButton.state === "loading") {
-            return;
-        }
-
-        if (this._password !== this._repeatPasswordInput.value) {
-            await alert($l("You didn't repeat your master password correctly. Try again!"), {
-                type: "warning",
-                title: "Incorrect Master Password",
+    private async _handleMfaFallback(email: string, password: string) {
+        try {
+            const req = await startAuthRequest({
+                purpose: this.asAdmin ? AuthPurpose.AdminLogin : AuthPurpose.Login,
+                email,
             });
+            const res = await completeAuthRequest(req);
+            if (res && res.token) {
+                await this.app.login({
+                    email,
+                    password,
+                    authToken: res.token,
+                    addTrustedDevice: true,
+                    asAdmin: this.asAdmin,
+                });
+                this.go("items");
+            }
+        } catch (err: any) {
+            this._loginError = err.message || $l("Doğrulama başarısız oldu.");
+        }
+    }
+
+    /* -------------------------------------------------------------
+       2. DOĞRUDAN KAYIT (SIGNUP)
+       ------------------------------------------------------------- */
+    private async _handleSignup(): Promise<void> {
+        if (this._signupSubmitButton?.state === "loading") {
             return;
         }
 
-        const email = this._email;
-        const name = this._name;
-        const password = this._password;
+        const email = (this._signupEmailInput?.value || "").trim();
+        const name = (this._signupNameInput?.value || "").trim();
+        const password = this._signupPasswordInput?.value || "";
+        const repeatPassword = this._signupRepeatPasswordInput?.value || "";
 
-        this._confirmPasswordButton.start();
+        if (!email) {
+            this._signupError = $l("Lütfen geçerli bir e-posta adresi veya kullanıcı adı girin.");
+            this.rumble();
+            this._signupEmailInput?.focus();
+            return;
+        }
+
+        if (!password) {
+            this._signupError = $l("Lütfen bir şifre belirleyin.");
+            this.rumble();
+            this._signupPasswordInput?.focus();
+            return;
+        }
+
+        if (password.length < 4) {
+            this._signupError = $l("Şifreniz en az 4 karakter uzunluğunda olmalıdır.");
+            this.rumble();
+            this._signupPasswordInput?.focus();
+            return;
+        }
+
+        if (password !== repeatPassword) {
+            this._signupError = $l("Girdiğiniz şifreler birbiriyle uyuşmuyor!");
+            this.rumble();
+            this._signupRepeatPasswordInput?.focus();
+            return;
+        }
+
+        if (this._signupTosCheckbox && !this._signupTosCheckbox.checked) {
+            this._signupError = $l("Lütfen kullanım koşullarını kabul edin.");
+            this.rumble();
+            return;
+        }
+
+        this._signupError = "";
+        this._signupSubmitButton?.start();
 
         try {
-            await this.app.signup({ email, password, name, authToken: this._authToken });
-            this._confirmPasswordButton.success();
-            const { email: _email, name: _name, authToken, deviceTrusted, ...params } = this.router.params;
-            this.go("signup/success", params);
-        } catch (e) {
-            this._confirmPasswordButton.fail();
-            switch (e.code) {
-                case ErrorCode.ACCOUNT_EXISTS:
-                    this._accountExists();
-                    return;
-                default:
-                    alert(e.message || $l("Server error."), { type: "warning" });
-                    throw e;
-            }
-        }
-
-        this._password = "";
-    }
-
-    private _done() {
-        const invite = this._invite;
-        const { invite: _inv, ...params } = this.router.params;
-        this.go(invite ? `invite/${invite.orgId}/${invite.id}` : "items", params);
-    }
-
-    private async _accountExists() {
-        const choice = await choose(
-            $l("An account with this email address already exists!"),
-            [$l("Login"), $l("Change Email")],
-            { type: "warning", title: $l("Account Exists") }
-        );
-        if (choice === 0) {
-            router.go("login");
-        } else {
-            const { authToken, ...params } = router.params;
-            router.go("signup", params);
-            this._emailInput.focus();
-        }
-    }
-
-    protected async _migrateLegacyAccount(authResponse: {
-        email: string;
-        legacyData?: PBES2Container;
-        token: string;
-    }): Promise<boolean> {
-        const legacyData = authResponse.legacyData!;
-
-        this._submitEmailButton.start();
-
-        const choice = await alert(
-            $l(
-                "You don't have a Padloc 4 account yet but we've found " +
-                    "an account from an older version. " +
-                    "Would you like to migrate your account to Padloc 4 now?"
-            ),
-            {
-                title: "Account Migration",
-                icon: "user",
-                options: [$l("Migrate"), $l("Learn More"), $l("Cancel")],
-            }
-        );
-
-        if (choice === 1) {
-            window.open("https://padloc.app/help/migrate-v3", "_system");
-            return this._migrateLegacyAccount(authResponse);
-        } else if (choice === 2) {
-            this._submitEmailButton.stop();
-            return false;
-        }
-
-        const password = await prompt($l("Please enter your master password!"), {
-            title: $l("Migrating Account"),
-            placeholder: $l("Enter Master Password"),
-            confirmLabel: $l("Submit"),
-            type: "password",
-            preventAutoClose: true,
-            validate: async (password: string) => {
-                try {
-                    await legacyData.unlock(password);
-                } catch (e) {
-                    throw $l("Wrong password! Please try again!");
-                }
-                return password;
-            },
-        });
-        const items = await importLegacyContainer(legacyData);
-
-        if (items && password) {
-            await this.app.signup({ email: authResponse.email, password, name: "", authToken: authResponse.token });
-            await this.app.addItems(items, this.app.mainVault!);
-            const deleteLegacy = await confirm(
-                $l(
-                    "Your account and all associated data was migrated successfully! Do you want to delete your old account now?"
-                ),
-                $l("Yes"),
-                $l("No"),
-                { title: $l("Delete Legacy Account"), icon: "delete", preventAutoClose: true }
-            );
-
-            if (deleteLegacy) {
-                await this.app.api.deleteLegacyAccount();
-            }
-
-            await alert(
-                $l(
-                    "All done! Please note that you won't be able to access your Padloc 4 account " +
-                        "with older versions of the app, so please make sure you have the latest version installed " +
-                        "on all your devices! (You can find download links for all platforms at " +
-                        "https://padloc.app/downloads/). Enjoy using Padloc 4!"
-                ),
-                {
-                    title: $l("Migration Complete"),
-                    type: "success",
-                }
-            );
-
-            const { email: _email, name: _name, authToken, deviceTrusted, ...params } = this.router.params;
-            this.go("signup/success", params);
-            this._submitEmailButton.success();
-            return true;
-        } else {
-            alert($l("Unfortunately we could not complete migration of your data."), {
-                type: "warning",
+            await this.app.signup({
+                email,
+                name,
+                password,
+                authToken: "",
+                invite: this._invite ? { id: this._invite.id, org: this._invite.orgId } : undefined,
             });
-            this._submitEmailButton.stop();
-            return false;
+
+            this._signupSubmitButton?.success();
+            await alert($l("Hesabınız başarıyla oluşturuldu ve oturum açıldı!"), {
+                title: $l("Kayıt Başarılı"),
+                type: "success",
+            });
+            this.go("items");
+        } catch (e: any) {
+            this._signupSubmitButton?.fail();
+            this.rumble();
+            if (e.code === ErrorCode.ACCOUNT_EXISTS) {
+                this._signupError = $l("Bu hesap zaten mevcut! Lütfen giriş yapın.");
+            } else {
+                this._signupError = e.message || $l("Kayıt oluşturulurken bir hata meydana geldi.");
+            }
         }
     }
 
+    /* -------------------------------------------------------------
+       3. ŞİFREMİ UNUTTUM / SIFIRLAMA (RECOVERY)
+       ------------------------------------------------------------- */
+    private async _handleSendResetCode(): Promise<void> {
+        if (this._forgotSendCodeButton?.state === "loading") {
+            return;
+        }
+
+        const email = (this._forgotEmailInput?.value || "").trim();
+        if (!email) {
+            this._forgotError = $l("Lütfen kayıtlı e-posta adresinizi girin.");
+            this.rumble();
+            this._forgotEmailInput?.focus();
+            return;
+        }
+
+        this._forgotError = "";
+        this._forgotSuccess = "";
+        this._forgotSendCodeButton?.start();
+
+        try {
+            // Standart SMTP üzerinden sıfırlama talebi
+            await startAuthRequest({
+                purpose: AuthPurpose.Recover,
+                email,
+            });
+
+            this._forgotSendCodeButton?.success();
+            this._forgotSuccess = $l(
+                "Sıfırlama kodu e-posta adresinize gönderildi. Lütfen gelen kutunuzu kontrol edin.",
+            );
+            this._forgotStep = 2;
+        } catch (e: any) {
+            this._forgotSendCodeButton?.fail();
+            this._forgotError = e.message || $l("Sıfırlama kodu gönderilemedi. Lütfen adresi kontrol edin.");
+        }
+    }
+
+    private async _handleCompletePasswordReset(): Promise<void> {
+        if (this._forgotResetSubmitButton?.state === "loading") {
+            return;
+        }
+
+        const email = (this._forgotEmailInput?.value || "").trim();
+        const code = (this._forgotCodeInput?.value || "").trim();
+        const newPassword = this._forgotNewPasswordInput?.value || "";
+        const repeatPassword = this._forgotRepeatPasswordInput?.value || "";
+
+        if (!code) {
+            this._forgotError = $l("Lütfen e-postanıza gelen doğrulama kodunu girin.");
+            this._forgotCodeInput?.focus();
+            return;
+        }
+
+        if (!newPassword || newPassword.length < 4) {
+            this._forgotError = $l("Yeni şifreniz en az 4 karakter olmalıdır.");
+            this._forgotNewPasswordInput?.focus();
+            return;
+        }
+
+        if (newPassword !== repeatPassword) {
+            this._forgotError = $l("Yeni şifreler eşleşmiyor!");
+            this._forgotRepeatPasswordInput?.focus();
+            return;
+        }
+
+        this._forgotError = "";
+        this._forgotResetSubmitButton?.start();
+
+        try {
+            // Şifre kurtarma akışını tamamla
+            const { token } = await authenticate({ email, purpose: AuthPurpose.Recover });
+            await this.app.recoverAccount({ email, password: newPassword, verify: token });
+
+            this._forgotResetSubmitButton?.success();
+            await alert($l("Şifreniz başarıyla sıfırlandı! Yeni şifreniz ile giriş yapabilirsiniz."), {
+                title: $l("Şifre Sıfırlandı"),
+                type: "success",
+            });
+
+            this._mode = "login";
+            this._forgotStep = 1;
+            if (this._loginEmailInput) this._loginEmailInput.value = email;
+            if (this._loginPasswordInput) this._loginPasswordInput.value = newPassword;
+        } catch (e: any) {
+            this._forgotResetSubmitButton?.fail();
+            this._forgotError =
+                e.message || $l("Şifre sıfırlama tamamlanamadı. Kod hatalı veya süresi dolmuş olabilir.");
+        }
+    }
+
+    /* -------------------------------------------------------------
+       STİLLER (KOYU GECE MAVİSİ & SARI KURUMSAL TEMA)
+       ------------------------------------------------------------- */
     static styles = [
         ...StartForm.styles,
         css`
-            pl-input:not([focused]) + .hint,
-            pl-password-input:not([focused]) + .hint {
-                opacity: 0.5;
-                text-shadow: none;
+            :host {
+                display: block;
+                min-height: 100vh;
+                background:
+                    radial-gradient(circle at 50% 20%, rgba(245, 183, 0, 0.08) 0%, transparent 60%),
+                    var(--color-background-dark);
             }
 
-            .master-password {
-                position: relative;
-                background: var(--shade-2-color);
-                font-family: var(--font-family-mono);
-                font-size: var(--font-size-medium);
-                overflow-wrap: break-word;
-                text-align: center;
-                padding: 1em;
-                border: solid 1px var(--color-shade-2);
-                border-radius: 0.5em;
-                background: var(--color-background);
-            }
-
-            .master-password-cover {
+            .auth-container {
                 ${mixins.fullbleed()};
-                height: 2em;
-                line-height: 2em;
-                margin: auto;
-                text-shadow: none;
-                color: var(--color-shade-6);
+                ${mixins.scroll()};
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 2em 1em;
+                box-sizing: border-box;
             }
 
-            .master-password:hover {
-                background: var(--shade-3-color);
+            pl-logo {
+                margin: 0 auto 1.2em auto;
+                height: 4.2em;
+                width: auto;
             }
 
-            .master-password > * {
-                transition: transform 0.2s cubic-bezier(1, -0.3, 0, 1.3), opacity 0.2s;
+            .auth-card {
+                width: 100%;
+                max-width: 25.5em;
+                box-sizing: border-box;
+                border-radius: 1.2em;
+                padding: 2em;
+                background: linear-gradient(180deg, #111d42 0%, #0b132b 100%);
+                border: 1px solid rgba(245, 183, 0, 0.28);
+                box-shadow:
+                    0 20px 45px -10px rgba(0, 0, 0, 0.75),
+                    0 0 0 1px rgba(245, 183, 0, 0.15);
             }
 
-            .master-password:not(:hover):not(.reveal) .master-password-value,
-            .master-password:hover .master-password-cover,
-            .master-password.reveal .master-password-cover {
-                opacity: 0;
-                transform: scale(0);
+            .auth-tabs {
+                display: flex;
+                background: rgba(7, 12, 30, 0.85);
+                border-radius: 0.75em;
+                padding: 0.3em;
+                margin-bottom: 1.5em;
+                border: 1px solid rgba(245, 183, 0, 0.2);
+            }
+
+            .auth-tab {
+                flex: 1;
+                text-align: center;
+                padding: 0.7em 0.5em;
+                border-radius: 0.5em;
+                font-weight: 600;
+                font-size: 0.95em;
+                cursor: pointer;
+                color: #94a3b8;
+                transition: all 0.2s ease;
+                user-select: none;
+            }
+
+            .auth-tab.active {
+                background: #f5b700;
+                color: #070c1e;
+                box-shadow: 0 2px 10px rgba(245, 183, 0, 0.35);
+            }
+
+            .forgot-link {
+                color: #f5b700;
+                font-size: 0.85em;
+                text-decoration: none;
+                font-weight: 600;
+                cursor: pointer;
+                display: inline-block;
+                margin: 0.8em 0 1.2em 0;
+                transition: color 0.2s;
+            }
+
+            .forgot-link:hover {
+                color: #ffd000;
+                text-decoration: underline;
+            }
+
+            .back-to-login {
+                display: flex;
+                align-items: center;
+                gap: 0.4em;
+                color: #94a3b8;
+                font-size: 0.85em;
+                cursor: pointer;
+                margin-bottom: 1.2em;
+                transition: color 0.2s;
+            }
+
+            .back-to-login:hover {
+                color: #f5b700;
+            }
+
+            .auth-error {
+                background: rgba(239, 68, 68, 0.18);
+                border: 1px solid #ef4444;
+                color: #fca5a5;
+                padding: 0.75em 1em;
+                border-radius: 0.5em;
+                font-size: 0.85em;
+                text-align: center;
+                margin-bottom: 1.2em;
+                line-height: 1.35;
+            }
+
+            .auth-success {
+                background: rgba(245, 183, 0, 0.18);
+                border: 1px solid #f5b700;
+                color: #ffd000;
+                padding: 0.75em 1em;
+                border-radius: 0.5em;
+                font-size: 0.85em;
+                text-align: center;
+                margin-bottom: 1.2em;
+                line-height: 1.35;
+            }
+
+            .card-title {
+                font-size: 1.3em;
+                font-weight: 700;
+                color: #ffffff;
+                margin-bottom: 0.4em;
+                text-align: center;
+            }
+
+            .card-subtitle {
+                font-size: 0.85em;
+                color: #94a3b8;
+                margin-bottom: 1.5em;
+                text-align: center;
+                line-height: 1.4;
+            }
+
+            .tos-label {
+                display: flex;
+                align-items: center;
+                gap: 0.5em;
+                font-size: 0.85em;
+                color: #cbd5e1;
+                margin: 1.2em 0;
+            }
+
+            .tos-label a {
+                color: #f5b700;
+                text-decoration: underline;
+            }
+
+            /* PWA Kurulum Kartı */
+            .pwa-card {
+                width: 100%;
+                max-width: 25.5em;
+                box-sizing: border-box;
+                border-radius: 1em;
+                padding: 1.2em 1.5em;
+                margin-top: 1.5em;
+                background: rgba(17, 29, 66, 0.85);
+                border: 1px solid rgba(245, 183, 0, 0.25);
+                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+                display: flex;
+                flex-direction: column;
+                gap: 0.8em;
+            }
+
+            .pwa-header {
+                display: flex;
+                align-items: center;
+                gap: 0.9em;
+            }
+
+            .pwa-icon {
+                font-size: 2em;
+                color: #f5b700;
+            }
+
+            .pwa-title {
+                font-weight: 700;
+                font-size: 0.95em;
+                color: #ffffff;
+            }
+
+            .pwa-desc {
+                font-size: 0.8em;
+                color: #94a3b8;
+                line-height: 1.35;
+                margin-top: 0.2em;
+            }
+
+            .pwa-button {
+                --button-background: rgba(245, 183, 0, 0.15);
+                --button-color: #f5b700;
+                --button-border-color: rgba(245, 183, 0, 0.4);
+                font-weight: 600;
+            }
+
+            .pwa-button:hover {
+                --button-background: rgba(245, 183, 0, 0.25);
             }
         `,
     ];
 
+    /* -------------------------------------------------------------
+       RENDER METOTLARI
+       ------------------------------------------------------------- */
     render() {
-        const invite = this._invite;
         return html`
-            <div class="fullbleed scrolling">
-                <div class="fill centering double-padded vertical layout">
-                    <pl-logo class="animated"></pl-logo>
+            <div class="auth-container">
+                <pl-logo class="animated"></pl-logo>
 
-                    ${this.asAdmin
-                        ? html`
-                              <div class="animated subtle" style="margin-top: -2em; margin-bottom: 2em;">
-                                  ${$l("Admin Portal")}
-                              </div>
-                          `
-                        : ""}
-                    ${invite
-                        ? html`
-                              <div
-                                  class="double-padded small box background animated"
-                                  style="max-width: 25em; margin-bottom: 1.5em"
-                              >
-                                  Hi there! <strong>${invite.invitor}</strong>
-                                  <span>${$l("has invited you to join their organization")}</span>
-                                  <strong class="highlighted">${invite.orgName}</strong>.
-                                  ${this._page === "signup"
-                                      ? html`
-                                            Before you can accept, we'll need to <strong>create an account</strong> for
-                                            you. This will only take a few moments.
-                                        `
-                                      : html`
-                                            Before you can accept, you'll need to
-                                            <strong>login</strong>.
-                                        `}
-                                  ${this._emailInput && invite.email !== this._emailInput.value
-                                      ? html`
-                                            <div class="negative highlight top-margined">
-                                                <strong>Warning:</strong> This invite is meant for
-                                                <strong>${invite.email}</strong>, but you've entered
-                                                <strong>${this._emailInput.value}</strong>.
-                                                <a
-                                                    href="#"
-                                                    @click=${() => {
-                                                        this.go("start", {
-                                                            ...this.router.params,
-                                                            email: invite.email,
-                                                        });
-                                                        this._emailInput.value = invite.email;
-                                                    }}
-                                                >
-                                                    <pl-icon icon="arrow-right" class="inline"></pl-icon>Switch to
-                                                    ${invite.email}
-                                                </a>
-                                            </div>
-                                        `
-                                      : ""}
-                              </div>
-                          `
-                        : html``}
-
-                    <form class="double-padded animated" style="box-sizing: border-box" autocomplete="off">
-                        <pl-drawer .collapsed=${this._page === "signup" && this._step === "success"} class="springy">
-                            <div class="vertical layout" style="flex-direction: column-reverse">
-                                <pl-input
-                                    id="emailInput"
-                                    type="email"
-                                    required
-                                    select-on-focus
-                                    maxlength=${ACCOUNT_EMAIL_MAX_LENGTH}
-                                    .label=${$l("Email Address")}
-                                    @enter=${() => this._submitEmail()}
-                                    ?disabled=${this._page !== "start"}
-                                    @input=${() => this.requestUpdate()}
-                                >
-                                </pl-input>
-
-                                <div class="hint">${$l("Welcome! Please enter your email address to continue.")}</div>
-                            </div>
-                        </pl-drawer>
-
-                        <pl-drawer .collapsed=${this._page !== "start"} class="springy">
-                            <div class="spacer"></div>
-
-                            <div class="horizontal spacing evenly stretching layout">
-                                <pl-button
-                                    id="submitEmailButton"
-                                    @click=${() => this._submitEmail()}
-                                    ?disabled=${!this._emailInput?.value}
-                                >
-                                    <div>${$l("Continue")}</div>
-                                    <pl-icon icon="forward" class="left-margined"></pl-icon>
-                                </pl-button>
-                            </div>
-                        </pl-drawer>
-
-                        <pl-drawer
-                            .collapsed=${this._page !== "signup" || this._step !== "consent"}
-                            class="springy"
-                            id="consentDrawer"
-                        >
-                            <div class="spacer"></div>
-
-                            <div class="hint">
-                                Hi there, <strong class="break-words">${this._nameInput?.value || "Stranger"}</strong>!
-                                Let's set up your brand new ${process.env.PL_APP_NAME} account! (This will only take a
-                                few moments.)
-                            </div>
-
-                            <pl-input
-                                id="nameInput"
-                                maxlength=${ACCOUNT_NAME_MAX_LENGTH}
-                                .label=${$l("Your Name (Optional)")}
-                                @enter=${() => this._tosCheckbox?.focus()}
-                                ?disabled=${this._page !== "signup" || this._step !== "consent"}
-                                @input=${() => {
-                                    this.requestUpdate();
-                                    this._consentDrawer.updateInnerSize();
-                                    this._masterPasswordDrawer.updateInnerSize();
-                                }}
-                            >
-                            </pl-input>
-
-                            <div class="spacer"></div>
-
-                            <div class="small padded">
-                                <label>
-                                    <input type="checkbox" id="tosCheckbox" @input=${() => this.requestUpdate()} />
-                                    I have read and agree to the
-                                    <a href="${process.env.PL_TERMS_OF_SERVICE || "#"}">Terms of Service</a>
-                                </label>
-                            </div>
-
-                            <div class="spacer"></div>
-
-                            <div class="horizontal center-aligning stretching spacing layout">
-                                <pl-button class="tiny transparent" @click=${() => this.go("start")}>
-                                    <pl-icon icon="backward" class="right-margined"></pl-icon>
-                                    <div>${$l("Change Email")}</div>
-                                </pl-button>
-                                <pl-button @click=${() => this._submitName()} ?disabled=${!this._tosCheckbox?.checked}>
-                                    <div>${$l("Create Account")}</div>
-                                    <pl-icon icon="forward" class="left-margined"></pl-icon>
-                                </pl-button>
-                            </div>
-                        </pl-drawer>
-
-                        <pl-drawer .collapsed=${this._page !== "login"} class="springy">
-                            <div class="spacer"></div>
-
-                            <pl-password-input
-                                id="loginPasswordInput"
-                                required
-                                select-on-focus
-                                .label=${$l("Master Password")}
-                                class="bottom-margined"
-                                @enter=${() => this._login()}
-                                @input=${() => this.requestUpdate()}
-                            >
-                            </pl-password-input>
-
-                            ${this._loginError
-                                ? html`
-                                      <div class="negative inverted padded text-centering bottom-margined card">
-                                          ${this._loginError}
+                <div class="auth-card animated">
+                    ${
+                        this._mode !== "forgot"
+                            ? html`
+                                  <div class="auth-tabs">
+                                      <div
+                                          class="auth-tab ${this._mode === "login" ? "active" : ""}"
+                                          @click=${() => this._setMode("login")}
+                                      >
+                                          ${$l("Giriş Yap")}
                                       </div>
-                                  `
-                                : ""}
-
-                            <div class="horizontal spacing evenly stretching layout">
-                                <pl-button
-                                    id="loginButton"
-                                    @click=${() => this._login()}
-                                    ?disabled=${!this._loginPasswordInput?.value}
-                                    class="primary"
-                                >
-                                    <pl-icon icon="login" class="right-margined"></pl-icon>
-                                    <div>${$l("Login")}</div>
-                                </pl-button>
-                            </div>
-                        </pl-drawer>
-
-                        <pl-drawer
-                            .collapsed=${this._page !== "signup" ||
-                            !["choose-password", "confirm-password"].includes(this._step)}
-                            class="springy"
-                            id="masterPasswordDrawer"
-                        >
-                            <div class="padded spacer"></div>
-
-                            <div class="text-centering section-header">
-                                <div>
-                                    <div class="small subtle">
-                                        ${this._nameInput?.value ? `${this._nameInput.value}, ` : ""}
-                                        ${$l("Say hello to your")}
-                                    </div>
-                                    <div class="large bold">${$l("Master Password")}</div>
-                                    <pl-icon class="tiny subtle" icon="arrow-down"></pl-icon>
-                                </div>
-                            </div>
-
-                            <div class="master-password margined">
-                                <div class="master-password-value">
-                                    <span>${this._password}</span>
-                                </div>
-
-                                <div class="master-password-cover">
-                                    ${isTouch() ? $l("[Tap To Reveal]") : $l("[Hover To Reveal]")}
-                                </div>
-                            </div>
-                        </pl-drawer>
-
-                        <pl-drawer
-                            class="springy"
-                            .collapsed=${this._page !== "signup" || this._step !== "choose-password"}
-                        >
-                            <div class="horizontally-margined hint">
-                                <div>
-                                    ${$l(
-                                        "This random passphrase was generated just for you and is designed " +
-                                            "to be both secure and easy to remember."
-                                    )}
-                                </div>
-                            </div>
-
-                            <div class="top-margined tiny text-centering subtle">${$l("Don't like it?")}</div>
-
-                            <div class="centering horizontal layout">
-                                <pl-button class="tiny ghost" @click=${this._generatePassphrase}>
-                                    <pl-icon icon="refresh" class="right-margined"></pl-icon>
-                                    ${$l("Try Another One")}
-                                </pl-button>
-                                <div class="small double-margined">or</div>
-                                <pl-button class="tiny ghost" @click=${this._editMasterPassword}>
-                                    <pl-icon icon="edit" class="right-margined"></pl-icon>
-                                    ${$l("Choose Your Own")}
-                                </pl-button>
-                            </div>
-
-                            <div class="padded spacer"></div>
-
-                            <div class="center-aligning spacing horizontal layout">
-                                <pl-button class="tiny transparent" @click=${() => this.go("signup/consent")}>
-                                    <pl-icon icon="backward" class="right-margined"></pl-icon>
-                                    <div>${$l("Change Name")}</div>
-                                </pl-button>
-                                <pl-button class="stretch" @click=${() => this._submitPassword()}>
-                                    <div>${$l("Continue")}</div>
-                                    <pl-icon icon="forward" class="left-margined"></pl-icon>
-                                </pl-button>
-                            </div>
-                        </pl-drawer>
-
-                        <pl-drawer
-                            .collapsed=${this._page !== "signup" || this._step !== "confirm-password"}
-                            class="springy"
-                        >
-                            <div class="spacer"></div>
-
-                            <pl-password-input
-                                id="repeatPasswordInput"
-                                required
-                                .label=${$l("Repeat Master Password")}
-                                class="repeat-master-password"
-                                @enter=${() => this._confirmPassword()}
-                                @focus=${() => this._revealPassphrase()}
-                            >
-                            </pl-password-input>
-
-                            <div class="hint margined padded">
-                                ${$l(
-                                    "Your master password is the last password you'll ever have to remember! " +
-                                        "Please memorize it and never reveal it to anyone - not even us! " +
-                                        "We recommend writing it down on a piece of paper and " +
-                                        "storing it somewhere safe, at least until you have it safely memorized."
-                                )}
-                            </div>
-
-                            <div class="center-aligning spacing horizontal layout">
-                                <pl-button class="tiny transparent" @click=${() => this.go("signup/choose-password")}>
-                                    <pl-icon icon="backward" class="right-margined"></pl-icon>
-                                    <div>${$l("Change Password")}</div>
-                                </pl-button>
-                                <pl-button
-                                    id="confirmPasswordButton"
-                                    class="stretch"
-                                    @click=${() => this._confirmPassword()}
-                                >
-                                    <div>${$l("Continue")}</div>
-                                    <pl-icon icon="forward" class="left-margined"></pl-icon>
-                                </pl-button>
-                            </div>
-                        </pl-drawer>
-
-                        <pl-drawer class="springy" .collapsed=${this._page !== "signup" || this._step !== "success"}>
-                            <div class="huge spacer"></div>
-                            <div class="big highlighted text-centering">
-                                ${$l("All set!")} <pl-icon icon="celebrate" class="inline"></pl-icon>
-                            </div>
-                            <div class="padded bottom-margined text-centering">
-                                ${$l(
-                                    "Your account was created successfully. Enjoy using {0}!",
-                                    process.env.PL_APP_NAME!
-                                )}
-                            </div>
-                            <pl-button class="primary" @click=${() => this._done()}>
-                                <div>${$l("Get Started")}</div>
-                                <pl-icon icon="arrow-right" class="left-margined"></pl-icon>
-                            </pl-button>
-                        </pl-drawer>
-                    </form>
+                                      <div
+                                          class="auth-tab ${this._mode === "signup" ? "active" : ""}"
+                                          @click=${() => this._setMode("signup")}
+                                      >
+                                          ${$l("Kayıt Ol")}
+                                      </div>
+                                  </div>
+                              `
+                            : ""
+                    }
+                    ${this._mode === "login" ? this._renderLoginForm() : ""}
+                    ${this._mode === "signup" ? this._renderSignupForm() : ""}
+                    ${this._mode === "forgot" ? this._renderForgotForm() : ""}
                 </div>
+
+                <!-- Mobil Kurulum (PWA) Yönlendirme Alanı -->
+                <div class="pwa-card animated">
+                    <div class="pwa-header">
+                        <pl-icon icon="mobile" class="pwa-icon"></pl-icon>
+                        <div>
+                            <div class="pwa-title">${$l("Telefona Yükle / PWA Kurulum")}</div>
+                            <div class="pwa-desc">
+                                ${$l("Uygulamayı telefonunuza veya tabletinize doğrudan yükleyerek hızlı ve güvenli erişin.")}
+                            </div>
+                        </div>
+                    </div>
+                    <pl-button class="pwa-button" @click=${() => promptPwaInstall()}>
+                        <pl-icon icon="download" class="right-margined"></pl-icon>
+                        <div>${$l("Telefona Yükle / Kur")}</div>
+                    </pl-button>
+                </div>
+            </div>
+        `;
+    }
+
+    private _renderLoginForm() {
+        return html`
+            <div class="vertical layout">
+                ${this._loginError ? html` <div class="auth-error">${this._loginError}</div> ` : ""}
+
+                <pl-input
+                    id="loginEmailInput"
+                    type="text"
+                    required
+                    select-on-focus
+                    maxlength=${ACCOUNT_EMAIL_MAX_LENGTH}
+                    .label=${$l("Kullanıcı Adı veya E-posta")}
+                    @enter=${() => this._loginPasswordInput?.focus()}
+                >
+                </pl-input>
+
+                <div style="height: 0.8em"></div>
+
+                <pl-password-input
+                    id="loginPasswordInput"
+                    required
+                    select-on-focus
+                    .label=${$l("Şifre")}
+                    @enter=${() => this._handleLogin()}
+                >
+                </pl-password-input>
+
+                <div class="horizontal layout" style="justify-content: flex-end">
+                    <a class="forgot-link" @click=${() => this._setMode("forgot")}> ${$l("Şifremi Unuttum?")} </a>
+                </div>
+
+                <pl-button id="loginSubmitButton" class="primary stretch" @click=${() => this._handleLogin()}>
+                    <pl-icon icon="login" class="right-margined"></pl-icon>
+                    <div>${$l("Giriş Yap")}</div>
+                </pl-button>
+            </div>
+        `;
+    }
+
+    private _renderSignupForm() {
+        return html`
+            <div class="vertical layout">
+                ${this._signupError ? html` <div class="auth-error">${this._signupError}</div> ` : ""}
+
+                <pl-input
+                    id="signupEmailInput"
+                    type="text"
+                    required
+                    select-on-focus
+                    maxlength=${ACCOUNT_EMAIL_MAX_LENGTH}
+                    .label=${$l("E-posta veya Kullanıcı Adı")}
+                    @enter=${() => this._signupNameInput?.focus()}
+                >
+                </pl-input>
+
+                <div style="height: 0.8em"></div>
+
+                <pl-input
+                    id="signupNameInput"
+                    maxlength=${ACCOUNT_NAME_MAX_LENGTH}
+                    .label=${$l("Ad Soyad (İsteğe Bağlı)")}
+                    @enter=${() => this._signupPasswordInput?.focus()}
+                >
+                </pl-input>
+
+                <div style="height: 0.8em"></div>
+
+                <pl-password-input
+                    id="signupPasswordInput"
+                    required
+                    select-on-focus
+                    .label=${$l("Şifre")}
+                    @enter=${() => this._signupRepeatPasswordInput?.focus()}
+                >
+                </pl-password-input>
+
+                <div style="height: 0.8em"></div>
+
+                <pl-password-input
+                    id="signupRepeatPasswordInput"
+                    required
+                    select-on-focus
+                    .label=${$l("Şifreyi Tekrarla")}
+                    @enter=${() => this._handleSignup()}
+                >
+                </pl-password-input>
+
+                <label class="tos-label">
+                    <input type="checkbox" id="signupTosCheckbox" checked />
+                    <span>${$l("Kullanım Koşullarını kabul ediyorum")}</span>
+                </label>
+
+                <pl-button id="signupSubmitButton" class="primary stretch" @click=${() => this._handleSignup()}>
+                    <pl-icon icon="forward" class="right-margined"></pl-icon>
+                    <div>${$l("Kayıt Ol")}</div>
+                </pl-button>
+            </div>
+        `;
+    }
+
+    private _renderForgotForm() {
+        return html`
+            <div class="vertical layout">
+                <div class="back-to-login" @click=${() => this._setMode("login")}>
+                    <pl-icon icon="backward" class="small"></pl-icon>
+                    <div>${$l("Giriş Ekranına Dön")}</div>
+                </div>
+
+                <div class="card-title">${$l("Şifre Sıfırlama")}</div>
+                <div class="card-subtitle">
+                    ${
+                        this._forgotStep === 1
+                            ? $l("Kayıtlı e-posta adresinizi girin. Size bir sıfırlama kodu göndereceğiz.")
+                            : $l("E-postanıza gönderilen doğrulama kodunu ve yeni şifrenizi girin.")
+                    }
+                </div>
+
+                ${this._forgotError ? html` <div class="auth-error">${this._forgotError}</div> ` : ""}
+                ${this._forgotSuccess ? html` <div class="auth-success">${this._forgotSuccess}</div> ` : ""}
+                ${
+                    this._forgotStep === 1
+                        ? html`
+                              <pl-input
+                                  id="forgotEmailInput"
+                                  type="email"
+                                  required
+                                  select-on-focus
+                                  .label=${$l("E-posta Adresi")}
+                                  @enter=${() => this._handleSendResetCode()}
+                              >
+                              </pl-input>
+
+                              <div style="height: 1.2em"></div>
+
+                              <pl-button
+                                  id="forgotSendCodeButton"
+                                  class="primary stretch"
+                                  @click=${() => this._handleSendResetCode()}
+                              >
+                                  <pl-icon icon="mail" class="right-margined"></pl-icon>
+                                  <div>${$l("Sıfırlama Kodu Gönder")}</div>
+                              </pl-button>
+                          `
+                        : html`
+                              <pl-input
+                                  id="forgotCodeInput"
+                                  type="text"
+                                  required
+                                  .label=${$l("Doğrulama Kodu")}
+                                  @enter=${() => this._forgotNewPasswordInput?.focus()}
+                              >
+                              </pl-input>
+
+                              <div style="height: 0.8em"></div>
+
+                              <pl-password-input
+                                  id="forgotNewPasswordInput"
+                                  required
+                                  select-on-focus
+                                  .label=${$l("Yeni Şifre")}
+                                  @enter=${() => this._forgotRepeatPasswordInput?.focus()}
+                              >
+                              </pl-password-input>
+
+                              <div style="height: 0.8em"></div>
+
+                              <pl-password-input
+                                  id="forgotRepeatPasswordInput"
+                                  required
+                                  select-on-focus
+                                  .label=${$l("Yeni Şifre Tekrar")}
+                                  @enter=${() => this._handleCompletePasswordReset()}
+                              >
+                              </pl-password-input>
+
+                              <div style="height: 1.2em"></div>
+
+                              <pl-button
+                                  id="forgotResetSubmitButton"
+                                  class="primary stretch"
+                                  @click=${() => this._handleCompletePasswordReset()}
+                              >
+                                  <pl-icon icon="refresh" class="right-margined"></pl-icon>
+                                  <div>${$l("Şifreyi Güncelle ve Giriş Yap")}</div>
+                              </pl-button>
+                          `
+                }
             </div>
         `;
     }
