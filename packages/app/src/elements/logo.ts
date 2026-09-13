@@ -20,6 +20,12 @@ export class Logo extends StateMixin(LitElement) {
                 width: 100%;
                 height: 100%;
                 object-fit: contain;
+                filter: drop-shadow(0 0 12px rgba(252, 209, 22, 0.45));
+                transition: filter 0.3s ease;
+            }
+
+            :host(:hover) img {
+                filter: drop-shadow(0 0 18px rgba(252, 209, 22, 0.7));
             }
         `,
     ];

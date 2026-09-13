@@ -16,24 +16,8 @@ export function ServiceWorker<B extends Constructor<Object>>(baseClass: B) {
         private _wb: Workbox;
 
         private async _updateReady() {
-            const confirmed = await confirm(
-                $l("A new update is ready to install! Do you want to install it now?"),
-                $l("Install & Reload"),
-                $l("Later"),
-                { title: $l("Update Available"), icon: "update", preventAutoClose: true }
-            );
-
-            if (confirmed) {
-                // set up a listener that will reload the page as soon as the
-                // previously waiting service worker has taken control.
-                this._wb.addEventListener("controlling", () => {
-                    window.location.reload();
-                });
-
-                // Send a message telling the service worker to skip waiting.
-                // This will trigger the `controlling` event handler above.
-                this._wb.messageSW({ type: "INSTALL_UPDATE" });
-            }
+            // Immediately activate the new worker so clients are never stuck on stale code
+            this._wb.messageSW({ type: "INSTALL_UPDATE" });
         }
 
         initSW() {
@@ -43,12 +27,14 @@ export function ServiceWorker<B extends Constructor<Object>>(baseClass: B) {
 
             this._wb = new Workbox("/sw.js");
 
-            // Add an event listener to detect when the registered
-            // service worker has installed but is waiting to activate.
+            // When new worker is controlling, reload to get fresh assets
+            this._wb.addEventListener("controlling", () => {
+                window.location.reload();
+            });
+
+            // Auto-activate when waiting
             this._wb.addEventListener("waiting", () => {
-                setTimeout(() => {
-                    this._updateReady();
-                }, 1000);
+                this._updateReady();
             });
 
             this._wb.register();
