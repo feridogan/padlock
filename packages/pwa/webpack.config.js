@@ -14,7 +14,7 @@ function removeTrailingSlash(url) {
 
 const out = process.env.PL_PWA_DIR || resolve(__dirname, "dist");
 const serverUrl = removeTrailingSlash(
-    process.env.PL_SERVER_URL || `http://0.0.0.0:${process.env.PL_SERVER_PORT || 3000}`
+    process.env.PL_SERVER_URL || `http://0.0.0.0:${process.env.PL_SERVER_PORT || 3005}`
 );
 const pwaUrl = removeTrailingSlash(process.env.PL_PWA_URL || `http://localhost:${process.env.PL_PWA_PORT || 8080}`);
 const rootDir = resolve(__dirname, "../..");

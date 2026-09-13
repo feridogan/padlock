@@ -28,7 +28,7 @@ COPY assets /assets
 # STAGE: server (Backend API)
 # -----------------------------------------------------------------
 FROM base AS server
-EXPOSE 3000
+EXPOSE 3005
 ENV PL_ASSETS_DIR=/assets
 ENV PL_ATTACHMENTS_DIR=/attachments
 WORKDIR /padloc/packages/server
@@ -50,7 +50,7 @@ CMD ["build_and_start"]
 # STAGE: all-in-one (Tekil Konteyner Dağıtımı)
 # -----------------------------------------------------------------
 FROM base AS all-in-one
-EXPOSE 3000 8080
+EXPOSE 3005 8080
 ENV PL_ASSETS_DIR=/assets
 ENV PL_ATTACHMENTS_DIR=/attachments
 ENV PL_PWA_DIR=/pwa

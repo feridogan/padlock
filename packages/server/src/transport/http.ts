@@ -32,7 +32,7 @@ export function readBody(request: IncomingMessage, maxSize = 1e7): Promise<strin
 
 export class HTTPReceiverConfig extends Config {
     @ConfigParam("number")
-    port: number = 3000;
+    port: number = 3005;
 
     @ConfigParam("number")
     maxRequestSize: number = 1e9;

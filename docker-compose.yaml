@@ -9,11 +9,21 @@ services:
     image: padloc/server:latest
     restart: unless-stopped
     expose:
-      - "3000"
+      - "3005"
+    labels:
+      - "coolify.managed=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.server.rule=Host(`api-pass.feridundogan.com`)"
+      - "traefik.http.routers.server.entrypoints=https"
+      - "traefik.http.routers.server.tls=true"
+      - "traefik.http.routers.server.tls.certresolver=letsencrypt"
+      - "traefik.http.services.server.loadbalancer.server.port=3005"
     env_file:
       - path: .env
         required: false
     environment:
+      - PL_TRANSPORT_HTTP_PORT=3005
+      - PL_SERVER_PORT=3005
       - PL_SERVER_URL=${PL_SERVER_URL:-https://api-pass.feridundogan.com}
       - PL_PWA_URL=${PL_PWA_URL:-https://pass.feridundogan.com}
       - PL_ASSETS_DIR=/assets
@@ -46,6 +56,14 @@ services:
       - server
     expose:
       - "8080"
+    labels:
+      - "coolify.managed=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.pwa.rule=Host(`pass.feridundogan.com`)"
+      - "traefik.http.routers.pwa.entrypoints=https"
+      - "traefik.http.routers.pwa.tls=true"
+      - "traefik.http.routers.pwa.tls.certresolver=letsencrypt"
+      - "traefik.http.services.pwa.loadbalancer.server.port=8080"
     env_file:
       - path: .env
         required: false

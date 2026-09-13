@@ -227,9 +227,9 @@ export function getConfig() {
         env.PL_EMAIL_BACKEND = "smtp";
     }
 
-    // Support standard PORT fallback
-    if (!env.PL_TRANSPORT_HTTP_PORT && env.PORT) {
-        env.PL_TRANSPORT_HTTP_PORT = env.PORT;
+    // Support standard PORT / PL_SERVER_PORT fallback
+    if (!env.PL_TRANSPORT_HTTP_PORT && (env.PORT || env.PL_SERVER_PORT)) {
+        env.PL_TRANSPORT_HTTP_PORT = env.PORT || env.PL_SERVER_PORT;
     }
 
     const config = new PadlocConfig().fromEnv(env, "PL_");
