@@ -33,6 +33,7 @@ COPY packages/locale/res ./packages/locale/res
 COPY packages/locale/tsconfig.json ./packages/locale/
 COPY assets /assets
 COPY assets /padloc/assets
+COPY assets /padloc/packages/app/assets
 
 WORKDIR /padloc/packages/pwa
 

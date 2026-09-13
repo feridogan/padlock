@@ -63,12 +63,18 @@ module.exports = {
     resolve: {
         extensions: [".ts", ".js", ".css", ".svg", ".png", ".jpg"],
         alias: {
-            assets: existsSync(assetsDir) ? assetsDir : resolve(rootDir, "assets"),
+            assets: [
+                assetsDir,
+                resolve(rootDir, "assets"),
+                resolve(rootDir, "packages/app/assets"),
+                resolve(__dirname, "../app/assets"),
+            ],
         },
         modules: [
             resolve(__dirname, "node_modules"),
             resolve(rootDir, "node_modules"),
             rootDir,
+            resolve(rootDir, "packages/app"),
             "node_modules",
         ],
     },
